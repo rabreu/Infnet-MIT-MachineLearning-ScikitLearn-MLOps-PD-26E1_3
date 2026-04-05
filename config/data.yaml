@@ -1,0 +1,15 @@
+kaggle:
+  dataset: "dataset/teste"
+  file_pattern: "*.csv"
+
+ingest:
+  compression: "snappy"
+  chunk_size_rows: 5000
+  convert_dtypes: true
+  validate_schema: true
+
+schema:
+  required_columns:
+    - ""
+    - ""
+    - ""
