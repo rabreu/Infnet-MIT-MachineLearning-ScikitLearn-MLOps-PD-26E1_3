@@ -1,0 +1,27 @@
+# pipeline.yaml — Pipeline-level configuration
+# Controls execution behavior, output paths, and logging
+
+pipeline:
+  name: "olist-brazilian-ecommerce"
+  version: "1.0.0"
+  description: "Pipeline de ingestão dos dados de preços de imóveis (House Price — Kaggle)"
+
+paths:
+  raw_data_dir: "dataset/raw"
+  processed_data_dir: "dataset/processed"
+  output_filename: "olist-brazilian-ecommerce.parquet"
+  output_dir: "output/ingestion"
+
+execution:
+  skip_download_if_exists: true
+  skip_ingest_if_exists: false
+  force_redownload: false
+  force_ingest: true
+  engine: 'fastparquet'
+
+logging:
+  level: "INFO"                    # DEBUG | INFO | WARNING | ERROR
+  format: "%(asctime)s [%(levelname)s] %(name)s - %(message)s"
+  datefmt: "%Y-%m-%d %H:%M:%S"
+  log_to_file: false
+  log_file: "pipeline.log"

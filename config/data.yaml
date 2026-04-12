@@ -1,6 +1,15 @@
 kaggle:
-  dataset: "dataset/teste"
+  dataset: "olistbr/brazilian-ecommerce"
   file_pattern: "*.csv"
+  expected_files: ["olist_customers_dataset.csv",
+                   "olist_geolocation_dataset.csv",
+                   "olist_order_items_dataset.csv",
+                   "olist_order_payments_dataset.csv",
+                   "olist_order_reviews_dataset.csv",
+                   "olist_orders_dataset.csv",
+                   "olist_products_dataset.csv",
+                   "olist_sellers_dataset.csv",
+                   "product_category_name_translation.csv"]
 
 ingest:
   compression: "snappy"
@@ -10,6 +19,21 @@ ingest:
 
 schema:
   required_columns:
-    - ""
-    - ""
-    - ""
+    - "customer_id"
+    - "order_purchase_timestamp"
+    - "order_approved_at"
+    - "order_delivered_carrier_date"
+    - "order_delivered_customer_date"
+    - "order_estimated_delivery_date"
+    - "order_item_id"
+    - "product_id"
+    - "shipping_limit_date"
+    - "price"
+    - "product_category_name"
+    - "customer_zip_code_prefix"
+    - "customer_state"
+    - "late_delivery"
+    - "order_id"
+    - "seller_id"
+    - "shipping_limit_date"
+    - "customer_unique_id"
