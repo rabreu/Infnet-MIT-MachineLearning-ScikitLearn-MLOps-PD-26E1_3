@@ -152,7 +152,7 @@ def run_quality_checks(
 
     # ler parâmetros de qualidade do config
     suite_name = config.get('suite_name', 'default_suite')
-    fail_on_error = config.get('fail_pipeline_on_error', True)
+    fail_on_error = config.get('quality').get('fail_pipeline_on_error', True)
     table_expectations = config.get('table_expectations', [])
     column_expectations = config.get('column_expectations', [])
 

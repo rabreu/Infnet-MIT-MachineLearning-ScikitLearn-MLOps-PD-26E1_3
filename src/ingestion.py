@@ -200,22 +200,29 @@ def load_datasets(expected_files: list, data_path: Path, logger: Any) -> dict:
         logger.info(f"  [OK] '{_d}'...")
     return datasets
 
-def join(ds: dict, logger: Any) -> DataFrame:
-    logger.info(f"  [JOIN] Joining between datasets: '{ds.keys()}'")
-    join_order_order_items = ds.get('olist_orders_dataset.csv').set_index("order_id").join(ds.get('olist_order_items_dataset.csv').set_index("order_id"), lsuffix="ord",
+def join_tables(dfs: dict, logger: Any) -> DataFrame:
+    logger.info(f"  [JOIN] Joining between datasets: '{dfs.keys()}'")
+
+    join_order_order_items = dfs.get('olist_orders_dataset.csv').set_index("order_id").join(dfs.get('olist_order_items_dataset.csv').set_index("order_id"), lsuffix="ord",
                                                                    rsuffix="itm", validate="many_to_many", how="inner")
-    join_order_products = join_order_order_items.join(ds.get('olist_products_dataset.csv').set_index("product_id"),
+
+    join_order_products = join_order_order_items.join(dfs.get('olist_products_dataset.csv').set_index("product_id"),
                                                       on='product_id', lsuffix="itm", rsuffix="prd",
                                                       validate="many_to_many", how="inner")
-    join_order_seller = join_order_products.join(ds.get('olist_sellers_dataset.csv').set_index("seller_id"),
-                                                 on='seller_id', lsuffix="prd", rsuffix="slr", validate="many_to_many",
-                                                 how="inner")
-    data_join = join_order_seller.join(ds.get('olist_customers_dataset.csv').set_index('customer_id'), on='customer_id',
-                                                  rsuffix="cus", validate="many_to_one", how="inner")
-    logger.info(f"  [OK] Joining between datasets successful: '{data_join.columns}'...")
 
-    del join_order_order_items, join_order_products, join_order_seller
-    return data_join
+    join_order_order_items = join_order_products.join(dfs.get('olist_sellers_dataset.csv').set_index("seller_id"),
+                                                 on='seller_id', lsuffix="prd", rsuffix="slr", validate="many_to_one",
+                                                 how="inner")
+    join_order_order_items = join_order_order_items.join(dfs.get('olist_customers_dataset.csv').set_index('customer_id'), on='customer_id',
+                                                  rsuffix="cus", validate="many_to_one", how="inner")
+
+    join_order_order_items = join_order_order_items[(join_order_order_items['order_status'] == 'delivered')]
+
+    join_order_order_items.drop_duplicates(keep='last', inplace=True)
+
+    logger.info(f"  [OK] Joining between datasets successful: '{join_order_order_items.columns}'...")
+
+    return join_order_order_items
 
 def _validate_required_columns(
     parquet_path: Path,

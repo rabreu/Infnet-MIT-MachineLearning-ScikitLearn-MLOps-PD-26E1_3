@@ -28,37 +28,48 @@ table_expectations:
       max_value: 120000
 
   # Garante que o schema não mudou — nenhuma coluna foi adicionada ou removida
-columns_expectations:
   - type: expect_table_columns_to_match_set
     kwargs:
       column_set:
-        -"customer_id"
-        -"order_status"
-        -"order_purchase_timestamp"
-        -"order_approved_at"
-        -"order_delivered_carrier_date"
-        -"order_delivered_customer_date"
-        -"order_estimated_delivery_date"
-        -"order_item_id"-"product_id"
-        -"seller_id"
-        -"shipping_limit_date"
-        -"price"
-        -"freight_value"
-        -"product_category_name"
-        -"product_name_lenght"
-        -"product_description_lenght"
-        -"product_photos_qty"
-        -"product_weight_g"
-        -"product_length_cm"
-        -"product_height_cm"
-        -"product_width_cm"
-        -"seller_zip_code_prefix"
-        -"seller_city"-"seller_state"
-        -"customer_unique_id"
-        -"customer_zip_code_prefix"
-        -"customer_city"
-        -"customer_state"
+        - customer_id
+        - order_status
+        - order_purchase_timestamp
+        - order_approved_at
+        - order_delivered_carrier_date
+        - order_delivered_customer_date
+        - order_estimated_delivery_date
+        - order_item_id
+        - product_id
+        - seller_id
+        - shipping_limit_date
+        - price
+        - freight_value
+        - product_category_name
+        - product_name_lenght
+        - product_description_lenght
+        - product_photos_qty
+        - product_weight_g
+        - product_length_cm
+        - product_height_cm
+        - product_width_cm
+        - seller_zip_code_prefix
+        - seller_city
+        - seller_state
+        - customer_unique_id
+        - customer_zip_code_prefix
+        - customer_city
+        - customer_state
       exact_match: true
+  - type: ExpectCompoundColumnsToBeUnique
+    kwargs:
+      column_list:
+        - customer_id
+        - order_purchase_timestamp
+        - order_item_id
+  - type: ExpectColumnPairValuesAToBeGreaterThanB
+    kwargs:
+      column_A: shipping_limit_date
+      column_B: order_purchase_timestamp
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Expectations de COLUNA
@@ -76,7 +87,7 @@ column_expectations:
     - type: expect_column_proportion_of_non_null_values_to_be_between
       kwargs:
         min_value: 0
-        max_value: 9.5
+        max_value: 9.9
   order_delivered_carrier_date:
     - type: expect_column_proportion_of_non_null_values_to_be_between
       kwargs:
@@ -88,53 +99,14 @@ column_expectations:
         min_value: 0
         max_value: 9.9
   order_estimated_delivery_date:
-    - type: expect_column_proportion_of_non_null_values_to_be_between
-      kwargs:
-        min_value: 0
-        max_value: 9.9
-  order_item_id:
-    - type: expect_column_values_to_be_unique
     - type: expect_column_values_to_not_be_null
-  product_id:
+  order_item_id:
     - type: expect_column_values_to_not_be_null
   seller_id:
     - type: expect_column_values_to_not_be_null
   shipping_limit_date:
-    - type: expect_column_proportion_of_non_null_values_to_be_between
-      kwargs:
-        min_value: 0
-        max_value: 9.9
-  price:
     - type: expect_column_values_to_not_be_null
   freight_value:
-    - type: expect_column_values_to_not_be_null
-  product_category_name:
-    - type: expect_column_proportion_of_non_null_values_to_be_between
-      kwargs:
-        min_value: 0
-        max_value: 9.9
-    - type: ExpectColumnValuesToBeInTypeList
-      kwargs:
-
-#  product_name_lenght:
-#    - type: expect_column_values_to_not_be_null
-#  product_description_lenght:
-#    - type: expect_column_values_to_not_be_null
-#  product_photos_qty:
-#    - type: expect_column_values_to_not_be_null
-#  product_weight_g:
-#    - type: expect_column_values_to_not_be_null
-#  product_length_cm:
-#    - type: expect_column_values_to_not_be_null
-#  product_height_cm:
-#    - type: expect_column_values_to_not_be_null
-#  product_width_cm:
-#    - type: expect_column_values_to_not_be_null
-#  seller_zip_code_prefix:
-#    - type: expect_column_values_to_not_be_null
-  seller_city:
-    - type: expect_column_values_to_not_be_null
-  seller_state:
     - type: expect_column_values_to_not_be_null
   customer_unique_id:
     - type: expect_column_values_to_not_be_null

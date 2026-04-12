@@ -3,9 +3,6 @@ import os
 import sys
 from pathlib import Path
 
-import pyarrow.parquet as pq
-import pyarrow.csv as p_csv
-
 # %%
 # definições
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -22,7 +19,7 @@ for _p in PATHS_LIST:
 
 from src.utils.logger import get_logger
 from src.utils.config_loader import load_yaml
-from src.ingestion import ingest_csv_to_parquet, load_datasets, join
+from src.ingestion import ingest_csv_to_parquet, load_datasets, join_tables
 from src.dowloader import check_kaggle_credentials, list_remote_files, download_dataset
 # %%
 # fazer a leitura dos arquivos de configuração
@@ -103,12 +100,11 @@ datasets = load_datasets(expected_files=expected_files,
                          logger=logger
 )
 
-data = join(datasets,
+data = join_tables(datasets,
             logger=logger
 )
 
 data.to_csv(path_or_buf=join_path, index=False)
-# data.to_parquet(path=Path(processed_dir + '/' + output_filename), index=False)
 
 logger.info('   %s (%.1f KB)', join_path.name, join_path.stat().st_size / 1024 )
 
