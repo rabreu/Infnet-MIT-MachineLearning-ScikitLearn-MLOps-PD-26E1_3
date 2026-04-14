@@ -4,9 +4,8 @@ import time
 from typing import Any
 from pathlib import Path
 
-from altair import limit_rows
+import numpy as np
 from pandas import DataFrame
-
 from src.utils.logger import get_logger
 import pandas as pd
 
@@ -131,7 +130,7 @@ def ingest_csv_to_parquet(
                 logger.info("Schema: %d column(s) - %s", len(schema), schema.names)
 
                 for batch in reader:
-                    p_csv.write_csv(data=batch, output_file=csv_path.name)
+                    p_csv.write_csv(data=batch, output_file=raw_dir / csv_path.name)
                     output_csv = output_path / csv_path.name.replace('.csv', '.parquet')
 
                     # # Initialize writer on every file (schema drives the output)
@@ -201,6 +200,7 @@ def load_datasets(expected_files: list, data_path: Path, logger: Any) -> dict:
     return datasets
 
 def join_tables(dfs: dict, logger: Any) -> DataFrame:
+    dfs = dfs.copy()
     logger.info(f"  [JOIN] Joining between datasets: '{dfs.keys()}'")
 
     join_order_order_items = dfs.get('olist_orders_dataset.csv').set_index("order_id").join(dfs.get('olist_order_items_dataset.csv').set_index("order_id"), lsuffix="ord",
@@ -223,6 +223,43 @@ def join_tables(dfs: dict, logger: Any) -> DataFrame:
     logger.info(f"  [OK] Joining between datasets successful: '{join_order_order_items.columns}'...")
 
     return join_order_order_items
+
+def convert_column(df: DataFrame, columns: list, convert_to: str, *dt_format: str, logger: Any) -> DataFrame:
+    match convert_to.upper():
+        case('DATETIME_TO_STR_NUMBER'):
+            if dt_format:
+                df = _convert_from_datetime_to_str_number(df, columns, dt_format[0], logger)
+        case('INT_16'):
+            df = __convert_str_to_int16(df, columns)
+    return df
+
+def _convert_from_datetime_to_str_number(df: DataFrame, cols: list, dt_format: str, logger: Any) -> DataFrame:
+    df = df.copy()
+    from datetime import datetime
+    for _ in cols:
+        logger.info(f"Converting '{_}' - from DATETIME to numeric STRING...")
+        logger.info(f"  [READING] '{_}'...")
+        df[_] = np.array(df[_].apply(
+            lambda dt: str(datetime.strptime(dt, dt_format).toordinal()) if not pd.isna(dt) else np.nan)
+                 .astype(str))
+        # loc = df.columns.get_loc(_)
+        # df[_] = np.array(df.iloc[0:,loc:loc+1]).astype(np.uint64)
+        logger.info(f"  [OK] '{_}' - {len(df[_])}")
+    return df
+
+def _convert_columns(df: DataFrame, cols: list, function) -> DataFrame:
+    df = df.copy()
+    for _col in cols:
+        _ar = dict()
+        for _ in range(len(df)):
+            _ar.update({_col: int(function(_col))})
+    return df
+
+def __convert_str_to_int16(df: DataFrame, cols: list) -> DataFrame:
+    df = df.copy()
+    for _ in cols:
+        df[_] = np.array(df[cols[_]]).astype(int)
+    return df
 
 def _validate_required_columns(
     parquet_path: Path,
@@ -254,4 +291,3 @@ def _validate_required_columns(
         "Schema validation OK - all %d required column(s) present.",
         len(required_columns),
     )
-

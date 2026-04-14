@@ -17,6 +17,16 @@ ingest:
   convert_dtypes: true
   validate_schema: true
 
+  convert:
+    datetime_format: "%Y-%m-%d %H:%M:%S"
+    datetime_to_str_number:
+      - "order_delivered_customer_date"
+      - "order_delivered_carrier_date"
+      - "order_purchase_timestamp"
+      - "order_estimated_delivery_date"
+      - "order_approved_at"
+      - "shipping_limit_date"
+
 schema:
   required_columns:
     - "customer_id"

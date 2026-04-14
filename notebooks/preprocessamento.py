@@ -73,8 +73,8 @@ logger.info('Config carregada: pipeline.yaml + data.yaml + preprocessing.yaml')
 
 # %%
 prep_cfg    = config.get('preprocessing', {})
-output_dir  = ROOT_DIR / prep_cfg.get('output_dir', 'data/features')
-output_path = output_dir / prep_cfg.get('output_filename', 'house_price_features.parquet')
+output_dir  = ROOT_DIR / prep_cfg.get('output_dir', 'dataset/features')
+output_path = output_dir / prep_cfg.get('output_filename')
 compression = prep_cfg.get('compression', 'snappy')
 
 logger.info('Saída      : %s', output_path)
@@ -119,7 +119,8 @@ logger.info('Features para seleção    : %d', len(config.get('feature_selection
 # %%
 # Caminho do Parquet gerado pela etapa de ingestão
 processed_dir = ROOT_DIR / config['paths']['processed_data_dir']
-parquet_path  = processed_dir / config['paths']['output_filename']
+output_dir = processed_dir / config['paths']['output_dir']
+parquet_path  = output_dir / config['paths']['output_filename']
 
 logger.info('Lendo: %s', parquet_path)
 
@@ -175,16 +176,16 @@ logger.info(df.describe())
 # ─────────────────────────────────────────────────────────────────────────────
 
 # %%
-logger.info('─' * 60)
-logger.info('SEÇÃO 2: Imputação — delegada ao Pipeline de modelagem (ver modelagem_walkthrough.py)')
-imp_specs = config.get('imputation', [])
-logger.info('Especificações (para referência): %s', imp_specs)
-n_null = int(df['total_bedrooms'].isna().sum())
-logger.info('NaN em total_bedrooms: %d (%.2f%%) — serão imputados no pipeline', n_null, 100 * n_null / len(df))
-
-# %%
-# Confirma visualmente: NaN presentes (serão tratados no pipeline)
-df[['total_bedrooms', 'ocean_proximity']].describe()
+# logger.info('─' * 60)
+# logger.info('SEÇÃO 2: Imputação — delegada ao Pipeline de modelagem (ver modelagem_walkthrough.py)')
+# imp_specs = config.get('imputation', [])
+# logger.info('Especificações (para referência): %s', imp_specs)
+# n_null = int(df['total_bedrooms'].isna().sum())
+# logger.info('NaN em total_bedrooms: %d (%.2f%%) — serão imputados no pipeline', n_null, 100 * n_null / len(df))
+#
+# # %%
+# # Confirma visualmente: NaN presentes (serão tratados no pipeline)
+# df[['total_bedrooms', 'ocean_proximity']].describe()
 
 # %%
 # ─────────────────────────────────────────────────────────────────────────────
@@ -215,18 +216,19 @@ df = flag_transformer.transform(df)
 
 # %%
 # Inspeciona os resultados
-for spec in flags_cfg:
-    new_col = spec['new_column']
-    logger.info(
-        "'%s': %d linhas = 1 (%.2f%%)",
-        new_col,
-        int(df[new_col].sum()),
-        100 * df[new_col].mean(),
-    )
+for flag in flags_cfg:
+    for key, value in flag.items():
+        if key == 'new_column':
+            new_col = value
+            logger.info(
+                "'%s': %d linhas",
+                new_col,
+                df[new_col].count(),
+        )
 
 # %%
 # Distribuição da variável alvo separada por flag de censura
-logger.info(df.groupby('is_capped_target')['median_house_value'].describe())
+# logger.info(df.groupby('is_capped_target')['median_house_value'].describe())
 
 # %%
 # ─────────────────────────────────────────────────────────────────────────────
@@ -245,25 +247,25 @@ logger.info(df.groupby('is_capped_target')['median_house_value'].describe())
 # ─────────────────────────────────────────────────────────────────────────────
 
 # %%
-ratio_cfg = config.get('ratio_features', [])
-logger.info('─' * 60)
-logger.info('SEÇÃO 4: Features de Razão')
+# ratio_cfg = config.get('ratio_features', [])
+# logger.info('─' * 60)
+# logger.info('SEÇÃO 4: Features de Razão')
 
 # %%
-ratio_transformer = RatioFeatureTransformer(ratio_cfg, logger=logger)
-df = ratio_transformer.transform(df)
+# ratio_transformer = RatioFeatureTransformer(ratio_cfg, logger=logger)
+# df = ratio_transformer.transform(df)
 
 # %%
 # Estatísticas das novas features
-new_ratio_cols = [spec['name'] for spec in ratio_cfg]
-logger.info(df[new_ratio_cols].describe())
+# new_ratio_cols = [spec['name'] for spec in ratio_cfg]
+# logger.info(df[new_ratio_cols].describe())
 
 # %%
 # Correlação com o target — confirma que razões são mais informativas
-logger.info('Correlação das razões com median_house_value:')
-for col in new_ratio_cols:
-    corr = df[col].corr(df['median_house_value'])
-    logger.info('  %-30s r = %.3f', col, corr)
+# logger.info('Correlação das razões com median_house_value:')
+# for col in new_ratio_cols:
+#     corr = df[col].corr(df['median_house_value'])
+#     logger.info('  %-30s r = %.3f', col, corr)
 
 # %%
 # ─────────────────────────────────────────────────────────────────────────────
@@ -282,28 +284,28 @@ for col in new_ratio_cols:
 # ─────────────────────────────────────────────────────────────────────────────
 
 # %%
-log_cols = config.get('log_transform', {}).get('columns', [])
-logger.info('─' * 60)
-logger.info('SEÇÃO 5: Transformação Logarítmica (log1p)')
+# log_cols = config.get('log_transform', {}).get('columns', [])
+# logger.info('─' * 60)
+# logger.info('SEÇÃO 5: Transformação Logarítmica (log1p)')
 
 # %%
-log_transformer = LogTransformer(log_cols, logger=logger)
-df = log_transformer.transform(df)
+# log_transformer = LogTransformer(log_cols, logger=logger)
+# df = log_transformer.transform(df)
 
 # %%
 # Comparação de skewness: antes vs depois
-logger.info('Comparação de assimetria (skewness):')
-for col in log_cols:
-    if col in df.columns:
-        log_col = f'log_{col}'
-        skew_raw = df[col].dropna().skew()
-        skew_log = df[log_col].dropna().skew() if log_col in df.columns else float('nan')
-        logger.info('  %-30s  raw: %+.2f  → log: %+.2f', col, skew_raw, skew_log)
+# logger.info('Comparação de assimetria (skewness):')
+# for col in log_cols:
+#     if col in df.columns:
+#         log_col = f'log_{col}'
+#         skew_raw = df[col].dropna().skew()
+#         skew_log = df[log_col].dropna().skew() if log_col in df.columns else float('nan')
+#         logger.info('  %-30s  raw: %+.2f  → log: %+.2f', col, skew_raw, skew_log)
 
 # %%
 # Colunas log criadas
-log_created = [f'log_{c}' for c in log_cols if f'log_{c}' in df.columns]
-df[log_created].head()
+# log_created = [f'log_{c}' for c in log_cols if f'log_{c}' in df.columns]
+# df[log_created].head()
 
 # %%
 # ─────────────────────────────────────────────────────────────────────────────
@@ -320,31 +322,31 @@ df[log_created].head()
 # nearest_city_distance = mínimo das distâncias.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# %%
-geo_cfg = config.get('geo_distances', {})
-logger.info('─' * 60)
-logger.info('SEÇÃO 6: Distâncias Geográficas')
-logger.info('Cidades de referência: %s', [c['name'] for c in geo_cfg.get('cities', [])])
+# # %%
+# geo_cfg = config.get('geo_distances', {})
+# logger.info('─' * 60)
+# logger.info('SEÇÃO 6: Distâncias Geográficas')
+# logger.info('Cidades de referência: %s', [c['name'] for c in geo_cfg.get('cities', [])])
 
-# %%
-geo_transformer = GeoDistanceTransformer(geo_cfg, logger=logger)
-df = geo_transformer.transform(df)
+# # %%
+# geo_transformer = GeoDistanceTransformer(geo_cfg, logger=logger)
+# df = geo_transformer.transform(df)
 
 # %%
 # Estatísticas das distâncias calculadas
-dist_cols = [f"dist_{c['name']}" for c in geo_cfg.get('cities', [])]
-nearest_col = geo_cfg.get('nearest_city_column', 'nearest_city_distance')
-all_dist_cols = dist_cols + [nearest_col]
-
-logger.info(df[all_dist_cols].describe())
+# dist_cols = [f"dist_{c['name']}" for c in geo_cfg.get('cities', [])]
+# nearest_col = geo_cfg.get('nearest_city_column', 'nearest_city_distance')
+# all_dist_cols = dist_cols + [nearest_col]
+#
+# logger.info(df[all_dist_cols].describe())
 
 # %%
 # Correlação das distâncias com o target
-logger.info('Correlação das distâncias com median_house_value:')
-for col in all_dist_cols:
-    if col in df.columns:
-        corr = df[col].corr(df['median_house_value'])
-        logger.info('  %-35s r = %.3f', col, corr)
+# logger.info('Correlação das distâncias com median_house_value:')
+# for col in all_dist_cols:
+#     if col in df.columns:
+#         corr = df[col].corr(df['median_house_value'])
+#         logger.info('  %-35s r = %.3f', col, corr)
 
 # %%
 # ─────────────────────────────────────────────────────────────────────────────
@@ -360,27 +362,27 @@ for col in all_dist_cols:
 # ─────────────────────────────────────────────────────────────────────────────
 
 # %%
-poly_cfg = config.get('polynomial_features', [])
-logger.info('─' * 60)
-logger.info('SEÇÃO 7: Features Polinomiais e Interações')
+# poly_cfg = config.get('polynomial_features', [])
+# logger.info('─' * 60)
+# logger.info('SEÇÃO 7: Features Polinomiais e Interações')
 
-# %%
-poly_transformer = PolynomialFeatureTransformer(poly_cfg, logger=logger)
-df = poly_transformer.transform(df)
-
-# %%
-# Correlação das features polinomiais com o target
-poly_cols = [spec['name'] for spec in poly_cfg]
-logger.info('Correlação das features polinomiais com median_house_value:')
-for col in poly_cols:
-    if col in df.columns:
-        corr = df[col].corr(df['median_house_value'])
-        logger.info('  %-40s r = %.3f', col, corr)
-
-# %%
-logger.info(df[poly_cols].describe())
-
-# %%
+# # %%
+# poly_transformer = PolynomialFeatureTransformer(poly_cfg, logger=logger)
+# df = poly_transformer.transform(df)
+#
+# # %%
+# # Correlação das features polinomiais com o target
+# poly_cols = [spec['name'] for spec in poly_cfg]
+# logger.info('Correlação das features polinomiais com median_house_value:')
+# for col in poly_cols:
+#     if col in df.columns:
+#         corr = df[col].corr(df['median_house_value'])
+#         logger.info('  %-40s r = %.3f', col, corr)
+#
+# # %%
+# logger.info(df[poly_cols].describe())
+#
+# # %%
 # ─────────────────────────────────────────────────────────────────────────────
 # SEÇÃO 8 — Encoding da Variável Categórica
 #
@@ -398,36 +400,36 @@ logger.info(df[poly_cols].describe())
 #      - op_INLAND é a dummy mais preditiva: r = -0.485 com o target
 # ─────────────────────────────────────────────────────────────────────────────
 
-# %%
-enc_cfg = config.get('categorical_encoding', {})
-logger.info('─' * 60)
-logger.info('SEÇÃO 8: Encoding de ocean_proximity')
-logger.info('Mapa ordinal: %s', enc_cfg.get('ordinal_map'))
-
-# %%
-encoder = OceanProximityEncoder(enc_cfg, logger=logger)
-df = encoder.transform(df)
-
-# %%
-# Verificação do encoding ordinal
-logger.info('Distribuição do encoding ordinal:')
-ordinal_col = enc_cfg.get('ordinal_column', 'ocean_proximity_encoded')
-logger.info(df[[enc_cfg.get('column', 'ocean_proximity'), ordinal_col]].value_counts().sort_index())
-
-# %%
-# Colunas one-hot geradas (prefixo op_)
-prefix = enc_cfg.get('one_hot_prefix', 'op')
-dummy_cols = [c for c in df.columns if c.startswith(f'{prefix}_')]
-logger.info('Dummies criadas: %s', dummy_cols)
-
-# %%
-# Correlação das dummies com o target
-logger.info('Correlação das dummies com median_house_value:')
-for col in dummy_cols:
-    corr = df[col].corr(df['median_house_value'])
-    logger.info('  %-20s r = %.3f', col, corr)
-
-# %%
+# # %%
+# enc_cfg = config.get('categorical_encoding', {})
+# logger.info('─' * 60)
+# logger.info('SEÇÃO 8: Encoding de ocean_proximity')
+# logger.info('Mapa ordinal: %s', enc_cfg.get('ordinal_map'))
+#
+# # %%
+# encoder = OceanProximityEncoder(enc_cfg, logger=logger)
+# df = encoder.transform(df)
+#
+# # %%
+# # Verificação do encoding ordinal
+# logger.info('Distribuição do encoding ordinal:')
+# ordinal_col = enc_cfg.get('ordinal_column', 'ocean_proximity_encoded')
+# logger.info(df[[enc_cfg.get('column', 'ocean_proximity'), ordinal_col]].value_counts().sort_index())
+#
+# # %%
+# # Colunas one-hot geradas (prefixo op_)
+# prefix = enc_cfg.get('one_hot_prefix', 'op')
+# dummy_cols = [c for c in df.columns if c.startswith(f'{prefix}_')]
+# logger.info('Dummies criadas: %s', dummy_cols)
+#
+# # %%
+# # Correlação das dummies com o target
+# logger.info('Correlação das dummies com median_house_value:')
+# for col in dummy_cols:
+#     corr = df[col].corr(df['median_house_value'])
+#     logger.info('  %-20s r = %.3f', col, corr)
+#
+# # %%
 # ─────────────────────────────────────────────────────────────────────────────
 # SEÇÃO 9 — Seleção de Features
 #
@@ -443,26 +445,26 @@ for col in dummy_cols:
 # anterior tenha sido pulada.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# %%
-sel_cfg = config.get('feature_selection', {})
-features_to_keep = sel_cfg.get('features_to_keep', [])
-logger.info('─' * 60)
-logger.info('SEÇÃO 9: Seleção de Features')
-logger.info('Shape antes da seleção: %s', df.shape)
-logger.info('Features solicitadas: %d', len(features_to_keep))
-
-# %%
-selector = FeatureSelector(features_to_keep, logger=logger)
-df = selector.fit_transform(df)
-
-# %%
-logger.info('Shape após seleção: %s', df.shape)
-logger.info('Colunas selecionadas:')
-for i, col in enumerate(df.columns, 1):
-    logger.info('  %2d. %s', i, col)
-
-# %%
-logger.info(df.head())
+# # %%
+# sel_cfg = config.get('feature_selection', {})
+# features_to_keep = sel_cfg.get('features_to_keep', [])
+# logger.info('─' * 60)
+# logger.info('SEÇÃO 9: Seleção de Features')
+# logger.info('Shape antes da seleção: %s', df.shape)
+# logger.info('Features solicitadas: %d', len(features_to_keep))
+#
+# # %%
+# selector = FeatureSelector(features_to_keep, logger=logger)
+# df = selector.fit_transform(df)
+#
+# # %%
+# logger.info('Shape após seleção: %s', df.shape)
+# logger.info('Colunas selecionadas:')
+# for i, col in enumerate(df.columns, 1):
+#     logger.info('  %2d. %s', i, col)
+#
+# # %%
+# logger.info(df.head())
 
 # %%
 # ─────────────────────────────────────────────────────────────────────────────
@@ -477,28 +479,28 @@ logger.info(df.head())
 #   • Comparado entre execuções para detectar drift de features
 # ─────────────────────────────────────────────────────────────────────────────
 
-# %%
-# Cria o diretório de saída se não existir
-output_dir.mkdir(parents=True, exist_ok=True)
-logger.info('─' * 60)
-logger.info('SEÇÃO 11: Persistência')
-logger.info('Diretório de saída: %s', output_dir)
-
-# %%
-# Salva em Parquet
-df.to_parquet(str(output_path), compression=compression, index=False)
-size_mb = output_path.stat().st_size / (1024 ** 2)
-logger.info('Arquivo salvo: %s (%.2f MB)', output_path, size_mb)
-
-# %%
-# Validação pós-escrita: lê o schema sem carregar os dados
-schema_out = pq.read_schema(str(output_path))
-logger.info('Schema de saída (%d colunas):', len(schema_out))
-for field in schema_out:
-    logger.info('  %-35s %s', field.name, field.type)
-
-# %%
-# Lê uma amostra para confirmação visual
-df_check = pd.read_parquet(str(output_path))
-logger.info('Verificação pós-leitura — shape: %s', df_check.shape)
-logger.info(df_check.head())
+# # %%
+# # Cria o diretório de saída se não existir
+# output_dir.mkdir(parents=True, exist_ok=True)
+# logger.info('─' * 60)
+# logger.info('SEÇÃO 11: Persistência')
+# logger.info('Diretório de saída: %s', output_dir)
+#
+# # %%
+# # Salva em Parquet
+# df.to_parquet(str(output_path), compression=compression, index=False)
+# size_mb = output_path.stat().st_size / (1024 ** 2)
+# logger.info('Arquivo salvo: %s (%.2f MB)', output_path, size_mb)
+#
+# # %%
+# # Validação pós-escrita: lê o schema sem carregar os dados
+# schema_out = pq.read_schema(str(output_path))
+# logger.info('Schema de saída (%d colunas):', len(schema_out))
+# for field in schema_out:
+#     logger.info('  %-35s %s', field.name, field.type)
+#
+# # %%
+# # Lê uma amostra para confirmação visual
+# df_check = pd.read_parquet(str(output_path))
+# logger.info('Verificação pós-leitura — shape: %s', df_check.shape)
+# logger.info(df_check.head())

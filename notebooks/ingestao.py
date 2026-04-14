@@ -1,7 +1,8 @@
 # Configuração do Ambiente
-import os
 import sys
 from pathlib import Path
+
+from ingestion import convert_column
 
 # %%
 # definições
@@ -25,13 +26,6 @@ from src.dowloader import check_kaggle_credentials, list_remote_files, download_
 # fazer a leitura dos arquivos de configuração
 data_cfg = load_yaml(DATA_CONFIG)
 pipeline_cfg = load_yaml(PIPELINE_CONFIG)
-
-# os.umask(int(data_cfg.get('permissions').get('umask')))
-#
-info = os.stat(PIPELINE_CONFIG)
-
-print(info.st_uid)
-print(info.st_gid)
 
 # %%
 # obtendo a configuração do log
@@ -83,6 +77,8 @@ output_filename = pipeline_cfg.get('paths').get('output_filename')
 join_path = Path(raw_dir + '/' + output_filename.replace('.parquet', '.csv'))
 compression = data_cfg.get('ingest').get('compression')
 chunk_size = data_cfg.get('ingest').get('chunk_size_rows', 50_000)
+convert = data_cfg.get('ingest').get('convert')
+dt_format = convert.get('datetime_format')
 
 # dowload dos dados - fase Extract de um ETL / ELT
 downloaded = download_dataset(
@@ -103,6 +99,9 @@ datasets = load_datasets(expected_files=expected_files,
 data = join_tables(datasets,
             logger=logger
 )
+
+for type in convert:
+    data = convert_column(data, convert[type], type, dt_format, logger=logger)
 
 data.to_csv(path_or_buf=join_path, index=False)
 
@@ -134,4 +133,3 @@ result_path = ingest_csv_to_parquet(
     force=force_ingest,
     logging_config=log_cfg,
 )
-

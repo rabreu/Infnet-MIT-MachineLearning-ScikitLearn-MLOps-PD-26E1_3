@@ -187,25 +187,36 @@ class BinaryFlagTransformer(BaseEstimator, TransformerMixin):
 
     def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
         X = X.copy()
-        for spec in self.flags:
-            col = spec["column"]
-            val = spec["value"]
-            new_col = spec["new_column"]
+        params = ['column_1', 'column_2', 'new_column']
+        args = dict()
 
-            if col not in X.columns:
-                if self.logger:
-                    self.logger.warning(
-                        "BinaryFlagTransformer: coluna '%s' não encontrada — flag '%s' ignorada.",
-                        col, new_col,
-                    )
-                continue
+        # Filtra e unifica parâmetros
+        for _, _line in enumerate(self.flags):
+            if params[_] in self.flags[_]:
+                args.update({params[_]: _line[params[_]]})
 
-            X[new_col] = (X[col] == val).astype(int)
-            n_flagged = int(X[new_col].sum())
+        col_1, col_2, new_col = args.values()
+        del args, params, _line, _
+
+        if not X.columns.__contains__(col_1) or not X.columns.__contains__(col_2):
+            if self.logger:
+                self.logger.warning(
+                    "BinaryFlagTransformer: coluna(s) ['%s', '%s'] não encontrada — flag '%s' ignorada.",
+                    col_1, col_2, new_col,
+                )
+
+        n_col_values = dict()
+        for _x in range(len(X)):
+            value = True if X.get(col_1)[_x] > X.get(col_2)[_x] else False
+            n_col_values.update({_x: value})
+
+        X.insert(len(X.columns), new_col, n_col_values)
+
+        if self.logger:
             self._log(
-                "BinaryFlagTransformer: '%s' = %s → '%s': %d linhas flagadas (%.2f%%)",
-                col, val, new_col, n_flagged, 100 * n_flagged / len(X),
-            )
+                "BinaryFlagTransformer: '%s > %s' = %s → '%s': %d linhas processadas",
+                col_1, col_2, X[new_col], new_col, len(X[new_col]))
+
         return X
     
 # ─────────────────────────────────────────────────────────────────────────────
