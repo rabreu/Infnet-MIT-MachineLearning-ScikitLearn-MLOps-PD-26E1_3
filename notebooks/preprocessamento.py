@@ -479,28 +479,28 @@ for flag in flags_cfg:
 #   • Comparado entre execuções para detectar drift de features
 # ─────────────────────────────────────────────────────────────────────────────
 
-# # %%
-# # Cria o diretório de saída se não existir
-# output_dir.mkdir(parents=True, exist_ok=True)
-# logger.info('─' * 60)
-# logger.info('SEÇÃO 11: Persistência')
-# logger.info('Diretório de saída: %s', output_dir)
-#
-# # %%
-# # Salva em Parquet
-# df.to_parquet(str(output_path), compression=compression, index=False)
-# size_mb = output_path.stat().st_size / (1024 ** 2)
-# logger.info('Arquivo salvo: %s (%.2f MB)', output_path, size_mb)
-#
-# # %%
-# # Validação pós-escrita: lê o schema sem carregar os dados
-# schema_out = pq.read_schema(str(output_path))
-# logger.info('Schema de saída (%d colunas):', len(schema_out))
-# for field in schema_out:
-#     logger.info('  %-35s %s', field.name, field.type)
-#
-# # %%
-# # Lê uma amostra para confirmação visual
-# df_check = pd.read_parquet(str(output_path))
-# logger.info('Verificação pós-leitura — shape: %s', df_check.shape)
-# logger.info(df_check.head())
+# %%
+# Cria o diretório de saída se não existir
+output_path.parent.mkdir(parents=True, exist_ok=True)
+logger.info('─' * 60)
+logger.info('SEÇÃO 11: Persistência')
+logger.info('Diretório de saída: %s', output_dir)
+
+# %%
+# Salva em Parquet
+df.to_parquet(path=output_path, compression=compression, index=False)
+size_mb = output_path.stat().st_size / (1024 ** 2)
+logger.info('Arquivo salvo: %s (%.2f MB)', output_path, size_mb)
+
+# %%
+# Validação pós-escrita: lê o schema sem carregar os dados
+schema_out = pq.read_schema(str(output_path))
+logger.info('Schema de saída (%d colunas):', len(schema_out))
+for field in schema_out:
+    logger.info('  %-35s %s', field.name, field.type)
+
+# %%
+# Lê uma amostra para confirmação visual
+df_check = pd.read_parquet(str(output_path))
+logger.info('Verificação pós-leitura — shape: %s', df_check.shape)
+logger.info(df_check.head())

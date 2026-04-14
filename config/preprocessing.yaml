@@ -33,16 +33,16 @@ binary_flags:
 ## ── 3. Features de Razão ──────────────────────────────────────────────────────
 ## Razões são mais informativas que totais absolutos porque normalizam pelo
 ## tamanho do bloco (nº de domicílios). EDA mostrou r=-0.256 para bedrooms_per_room.
-#ratio_features:
-#  - name: "rooms_per_household"
-#    numerator: "total_rooms"
-#    denominator: "households"
-#  - name: "bedrooms_per_room"
-#    numerator: "total_bedrooms"
-#    denominator: "total_rooms"
-#  - name: "population_per_household"
-#    numerator: "population"
-#    denominator: "households"
+ratio_features:
+  - name: "rooms_per_household"
+    numerator: "total_rooms"
+    denominator: "households"
+  - name: "bedrooms_per_room"
+    numerator: "total_bedrooms"
+    denominator: "total_rooms"
+  - name: "population_per_household"
+    numerator: "population"
+    denominator: "households"
 #
 ## ── 4. Transformação Logarítmica (log1p) ──────────────────────────────────────
 ## Features com skewness > 1.5 se beneficiam de log1p:
@@ -100,11 +100,11 @@ binary_flags:
 #  - name: "median_income_x_housing_median_age"
 #    columns: ["median_income", "housing_median_age"]  # interação (produto)
 #
-## ── 7. Encoding da Variável Categórica ───────────────────────────────────────
-## ocean_proximity tem 5 categorias com impacto grande (η²=0.238).
-## Duas representações:
-##   ordinal: distância crescente ao oceano (0=ISLAND, 4=INLAND)
-##   one-hot: dummies explícitas (sem drop_first — mantemos todas para interpretação)
+# ── 7. Encoding da Variável Categórica ───────────────────────────────────────
+# ocean_proximity tem 5 categorias com impacto grande (η²=0.238).
+# Duas representações:
+#   ordinal: distância crescente ao oceano (0=ISLAND, 4=INLAND)
+#   one-hot: dummies explícitas (sem drop_first — mantemos todas para interpretação)
 #categorical_encoding:
 #  column: "ocean_proximity"
 #  ordinal_column: "ocean_proximity_encoded"
