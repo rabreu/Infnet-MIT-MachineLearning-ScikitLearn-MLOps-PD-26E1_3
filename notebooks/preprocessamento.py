@@ -40,13 +40,15 @@ from src.utils.config_loader import load_yaml
 # ── Importa todos os transformadores do módulo src/preprocessing.py ──────────
 from src.preprocessing import (
     GroupMedianImputer,
+    ConstantImputer,
     BinaryFlagTransformer,
     RatioFeatureTransformer,
     LogTransformer,
     GeoDistanceTransformer,
     PolynomialFeatureTransformer,
     OceanProximityEncoder,
-    FeatureSelector
+    FeatureSelector,
+    ConditionalImputer
 )
 
 # %%
@@ -72,8 +74,9 @@ logger.info('Config carregada: pipeline.yaml + data.yaml + preprocessing.yaml')
 # ─────────────────────────────────────────────────────────────────────────────
 
 # %%
-prep_cfg    = config.get('preprocessing', {})
-output_dir  = ROOT_DIR / prep_cfg.get('output_dir', 'dataset/features')
+prep_cfg    = preprocessing.get('preprocessing')
+processed_dir = prep_cfg.get('processed_data_dir')
+output_dir  = ROOT_DIR / processed_dir / prep_cfg.get('output_dir')
 output_path = output_dir / prep_cfg.get('output_filename')
 compression = prep_cfg.get('compression', 'snappy')
 
@@ -91,24 +94,20 @@ logger.info('Imputações configuradas : %d', len(config.get('imputation', [])))
 # Qualquer mudança no preprocessing.yaml aparece aqui sem alterar o código.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# %%
-prep_cfg    = config.get('preprocessing', {})
-output_dir  = ROOT_DIR / prep_cfg.get('output_dir', 'data/features')
-output_path = output_dir / prep_cfg.get('output_filename', 'house_price_features.parquet')
-compression = prep_cfg.get('compression', 'snappy')
-
 logger.info('Saída      : %s', output_path)
 logger.info('Compressão : %s', compression)
 
 # %%
 # Lista as transformações configuradas no YAML
-logger.info('Imputações configuradas : %d', len(config.get('imputation', [])))
+# logger.info('Imputações configuradas : %d', len(config.get('imputation', [])))
+logger.info('Imputações Condicionais : %d', len(config.get('conditional_imputation', [])))
+logger.info('Imputações Constantes   : %d', len(config.get('constant_imputation', [])))
 logger.info('Flags binárias          : %d', len(config.get('binary_flags', [])))
 logger.info('Features de razão       : %d', len(config.get('ratio_features', [])))
 logger.info('Colunas log1p           : %d', len(config.get('log_transform', {}).get('columns', [])))
 logger.info('Cidades para distâncias : %d', len(config.get('geo_distances', {}).get('cities', [])))
 logger.info('Features polinomiais    : %d', len(config.get('polynomial_features', [])))
-logger.info('Configurações de encoding: %s', config.get('categorical_encoding', {}))
+logger.info('Configurações de encoding: %s', len(config.get('categorical_encoding', {})))
 logger.info('Features para seleção    : %d', len(config.get('feature_selection', {}).get('features_to_keep', [])))
 
 # %%
@@ -118,28 +117,28 @@ logger.info('Features para seleção    : %d', len(config.get('feature_selection
 
 # %%
 # Caminho do Parquet gerado pela etapa de ingestão
-processed_dir = ROOT_DIR / config['paths']['processed_data_dir']
-output_dir = processed_dir / config['paths']['output_dir']
-parquet_path  = output_dir / config['paths']['output_filename']
+ingest_processed_dir = ROOT_DIR / config['paths']['processed_data_dir']
+ingest_output_dir = ingest_processed_dir / config['paths']['output_dir']
+ingest_parquet_path  = ingest_output_dir / config['paths']['output_filename']
 
-logger.info('Lendo: %s', parquet_path)
+logger.info('Lendo: %s', ingest_parquet_path)
 
-if not parquet_path.exists():
+if not ingest_parquet_path.exists():
     raise FileNotFoundError(
-        f"Arquivo Parquet não encontrado: {parquet_path}\n"
+        f"Arquivo Parquet não encontrado: {ingest_parquet_path}\n"
         "Execute ingestao.py e qualidade.py antes deste script."
     )
 
 # %%
 # Inspeciona o schema sem carregar os dados (leitura de metadados é barata)
-schema = pq.read_schema(str(parquet_path))
+schema = pq.read_schema(str(ingest_parquet_path))
 logger.info('Schema original (%d colunas):', len(schema))
 for field in schema:
     logger.info('  %-25s %s', field.name, field.type)
 
 # %%
 # Carrega o DataFrame completo
-df = pq.read_table(str(parquet_path)).to_pandas()
+df = pq.read_table(str(ingest_parquet_path)).to_pandas()
 logger.info('Shape original: %s', df.shape)
 
 # %%
@@ -148,60 +147,56 @@ logger.info(df.head())
 
 # Estatísticas descritivas e nulos — baseline antes do pré-processamento
 logger.info('Valores ausentes por coluna:')
-for col, n_null in df.isna().sum()[df.isna().sum() > 0].items():
-    logger.info('  %-25s %d (%.2f%%)', col, n_null, 100 * n_null / len(df))
+for n_col,col in enumerate(df.columns):
+    logger.info('  %d %s %s', n_col, col, df[col].hasnans)
 
 # %%
 logger.info(df.describe())
 
 # %%
 # ─────────────────────────────────────────────────────────────────────────────
-# SEÇÃO 2 — Imputação de Valores Ausentes  [MOVIDA PARA O PIPELINE DE MODELAGEM]
-#
-# ⚠ AVISO MLOps — Data Leakage
-# total_bedrooms tem ~207 NaN (~1%). GroupMedianImputer aprende as medianas
-# por grupo (ocean_proximity) no fit() e aplica no transform().
-#
-# Ajustar o imputador ANTES do split treino/teste usa informação do conjunto
-# de teste para preencher NaN no conjunto de treino → data leakage.
-#
-# total_bedrooms é usado como numerador de bedrooms_per_room (Seção 4).
-# Os NaN de total_bedrooms propagam para bedrooms_per_room, que está na
-# lista features_to_keep e portanto chega ao modelo.
-#
-# SOLUÇÃO: GroupMedianImputer é aplicado DENTRO do Pipeline de modelagem
-# (modelagem_walkthrough.py), APÓS o split treino/holdout, usando
-# ocean_proximity_encoded (ordinal 0-4) como grupo — mesma semântica,
-# compatível com o dataset já sem a coluna string original.
+# SEÇÃO 2 — Imputação de Valores Ausentes
 # ─────────────────────────────────────────────────────────────────────────────
 
-# %%
+# # %%
 # logger.info('─' * 60)
 # logger.info('SEÇÃO 2: Imputação — delegada ao Pipeline de modelagem (ver modelagem_walkthrough.py)')
 # imp_specs = config.get('imputation', [])
 # logger.info('Especificações (para referência): %s', imp_specs)
 # n_null = int(df['total_bedrooms'].isna().sum())
 # logger.info('NaN em total_bedrooms: %d (%.2f%%) — serão imputados no pipeline', n_null, 100 * n_null / len(df))
-#
+
 # # %%
 # # Confirma visualmente: NaN presentes (serão tratados no pipeline)
 # df[['total_bedrooms', 'ocean_proximity']].describe()
 
+
+const_specs = config.get('constant_imputation', [])
+logger.info('─' * 60)
+logger.info('SEÇÃO 1: Constant Imputation')
+logger.info('Especificações (para referência): %s', const_specs)
+constant_imputation = ConstantImputer(const_specs=const_specs, logger=logger)
+df = constant_imputation.transform(df)
+
+cond_imp = config.get('conditional_imputation', [])
+logger.info('─' * 60)
+logger.info('SEÇÃO 2: Conditional Imputation')
+logger.info('Especificações (para referência): %s', cond_imp)
+conditional_imputer = ConditionalImputer(cond_imp=cond_imp, logger=logger)
+df = conditional_imputer.transform(df)
+
+group_imp = config.get('group_imputation')
+logger.info('─' * 60)
+logger.info('SEÇÃO 1: Constant Imputation')
+logger.info('Especificações (para referência): %s', group_imp)
+for line in iter(group_imp):
+    group_transformer = GroupMedianImputer(group_col=line['group_by'], target_col=line['column'], logger=logger)
+    group_transformer.fit(df)
+    df = group_transformer.transform(df)
+
 # %%
 # ─────────────────────────────────────────────────────────────────────────────
 # SEÇÃO 3 — Flags Binárias
-#
-# Dois valores têm significado especial neste dataset:
-#
-# 1. housing_median_age == 52
-#    - Teto máximo de coleta — não representa "52 anos", mas "≥ 52 anos"
-#    - Blocos com esse valor podem ser sistematicamente mais antigos
-#    - A flag age_at_cap permite que o modelo aprenda esse padrão
-#
-# 2. median_house_value == 500001
-#    - Valor censurado: imóvel custou ≥ $500,001 mas foi truncado na coleta
-#    - 965 linhas (4.68%) — um modelo padrão subestimará esses imóveis
-#    - A flag is_capped_target sinaliza esses pontos para tratamento especial
 # ─────────────────────────────────────────────────────────────────────────────
 
 # %%
@@ -400,35 +395,35 @@ for flag in flags_cfg:
 #      - op_INLAND é a dummy mais preditiva: r = -0.485 com o target
 # ─────────────────────────────────────────────────────────────────────────────
 
-# # %%
-# enc_cfg = config.get('categorical_encoding', {})
-# logger.info('─' * 60)
-# logger.info('SEÇÃO 8: Encoding de ocean_proximity')
-# logger.info('Mapa ordinal: %s', enc_cfg.get('ordinal_map'))
-#
-# # %%
-# encoder = OceanProximityEncoder(enc_cfg, logger=logger)
-# df = encoder.transform(df)
-#
-# # %%
-# # Verificação do encoding ordinal
+# %%
+enc_cfg = config.get('categorical_encoding', {})
+logger.info('─' * 60)
+logger.info('SEÇÃO 8: Encoding de  Variável Categórica')
+logger.info('Mapa ordinal: %s', enc_cfg.get('ordinal_map'))
+
+# %%
+encoder = OceanProximityEncoder(enc_cfg, logger=logger)
+df = encoder.transform(df)
+
+# %%
+# Verificação do encoding ordinal
 # logger.info('Distribuição do encoding ordinal:')
-# ordinal_col = enc_cfg.get('ordinal_column', 'ocean_proximity_encoded')
-# logger.info(df[[enc_cfg.get('column', 'ocean_proximity'), ordinal_col]].value_counts().sort_index())
-#
-# # %%
-# # Colunas one-hot geradas (prefixo op_)
-# prefix = enc_cfg.get('one_hot_prefix', 'op')
-# dummy_cols = [c for c in df.columns if c.startswith(f'{prefix}_')]
-# logger.info('Dummies criadas: %s', dummy_cols)
-#
+# ordinal_col = enc_cfg.get('ordinal_column')
+# logger.info(df[[enc_cfg.get('column'), ordinal_col]].value_counts().sort_index())
+
+# %%
+# Colunas one-hot geradas (prefixo op_)
+prefix = enc_cfg.get('one_hot_prefix', 'op')
+dummy_cols = [c for c in df.columns if c.startswith(f'{prefix}_')]
+logger.info('Dummies criadas: %s', dummy_cols)
+
 # # %%
 # # Correlação das dummies com o target
 # logger.info('Correlação das dummies com median_house_value:')
 # for col in dummy_cols:
 #     corr = df[col].corr(df['median_house_value'])
 #     logger.info('  %-20s r = %.3f', col, corr)
-#
+
 # # %%
 # ─────────────────────────────────────────────────────────────────────────────
 # SEÇÃO 9 — Seleção de Features
@@ -445,26 +440,26 @@ for flag in flags_cfg:
 # anterior tenha sido pulada.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# # %%
-# sel_cfg = config.get('feature_selection', {})
-# features_to_keep = sel_cfg.get('features_to_keep', [])
-# logger.info('─' * 60)
-# logger.info('SEÇÃO 9: Seleção de Features')
-# logger.info('Shape antes da seleção: %s', df.shape)
-# logger.info('Features solicitadas: %d', len(features_to_keep))
-#
-# # %%
-# selector = FeatureSelector(features_to_keep, logger=logger)
-# df = selector.fit_transform(df)
-#
-# # %%
-# logger.info('Shape após seleção: %s', df.shape)
-# logger.info('Colunas selecionadas:')
-# for i, col in enumerate(df.columns, 1):
-#     logger.info('  %2d. %s', i, col)
-#
-# # %%
-# logger.info(df.head())
+# %%
+sel_cfg = config.get('feature_selection', {})
+features_to_keep = sel_cfg.get('features_to_keep', [])
+logger.info('─' * 60)
+logger.info('SEÇÃO 9: Seleção de Features')
+logger.info('Shape antes da seleção: %s', df.shape)
+logger.info('Features solicitadas: %d', len(features_to_keep))
+
+# %%
+selector = FeatureSelector(features_to_keep, logger=logger)
+df = selector.fit_transform(df)
+
+# %%
+logger.info('Shape após seleção: %s', df.shape)
+logger.info('Colunas selecionadas:')
+for i, col in enumerate(df.columns, 1):
+    logger.info('  %2d. %s', i, col)
+
+# %%
+logger.info(df.head())
 
 # %%
 # ─────────────────────────────────────────────────────────────────────────────
@@ -489,6 +484,7 @@ logger.info('Diretório de saída: %s', output_dir)
 # %%
 # Salva em Parquet
 df.to_parquet(path=output_path, compression=compression, index=False)
+df.to_csv(output_dir / prep_cfg.get('output_filename').replace('parquet', 'csv'), index=False)
 size_mb = output_path.stat().st_size / (1024 ** 2)
 logger.info('Arquivo salvo: %s (%.2f MB)', output_path, size_mb)
 

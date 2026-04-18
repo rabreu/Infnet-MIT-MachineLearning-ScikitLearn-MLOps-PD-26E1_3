@@ -126,7 +126,6 @@ result_path = ingest_csv_to_parquet(
     raw_dir=raw_dir,
     output_path=output_path,
     compression=compression,
-    engine=engine,
     chunk_size_rows=chunk_size,
     validate_schema=validate,
     skip_if_exists=skip_ingest,

@@ -26,6 +26,11 @@ ingest:
       - "order_estimated_delivery_date"
       - "order_approved_at"
       - "shipping_limit_date"
+    hex_to_decimal:
+      - "customer_id"
+      - "product_id"
+      - "seller_id"
+      - "customer_unique_id"
 
 schema:
   required_columns:

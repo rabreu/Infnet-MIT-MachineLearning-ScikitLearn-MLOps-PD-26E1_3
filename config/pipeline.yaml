@@ -7,17 +7,20 @@ pipeline:
   description: "Pipeline de ingestão dos dados de preços de imóveis (House Price — Kaggle)"
 
 paths:
-  raw_data_dir: "dataset/raw"
-  processed_data_dir: "dataset/processed"
+  raw_data_dir: "dataset/raw/"
+  processed_data_dir: "dataset/processed/"
   output_filename: "olist-brazilian-ecommerce.parquet"
-  output_dir: "output/ingestion"
+  output_dir: "ingestion/"
 
 execution:
   skip_download_if_exists: true
   skip_ingest_if_exists: false
   force_redownload: false
   force_ingest: true
-  engine: 'fastparquet'
+
+feature_selection:
+  target: "bin_delivered_on_time"
+  features_to_keep:
 
 logging:
   level: "INFO"                    # DEBUG | INFO | WARNING | ERROR

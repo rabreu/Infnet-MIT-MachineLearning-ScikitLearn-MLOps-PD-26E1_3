@@ -9,7 +9,8 @@
 
 # ── Saída ──────────────────────────────────────────────────────────────────────
 preprocessing:
-  output_dir: "dataset/features"
+  processed_data_dir: "dataset/processed/"
+  output_dir: "features/"
   output_filename: "olist_ecommerce_features.parquet"
   compression: "snappy"
 
@@ -18,31 +19,51 @@ preprocessing:
 # porque a distribuição é assimétrica (nunca usar média em features skewed)
 # e porque o preço dos imóveis varia muito por localização.
 #imputation:
-#  - column: "total_bedrooms"
+#    column: "product_photos_qty"
 #    strategy: "median"       # median | mean | constant
-#    group_by: "ocean_proximity"
+#    group_by: "product_category_name"
+
+group_imputation:
+  - column: "product_weight_g"
+    group_by: "product_weight_g"
+
+conditional_imputation:
+  columns: ["order_delivered_carrier_date", "order_approved_at"]
+  replace_by: ["order_delivered_customer_date", "order_purchase_timestamp"]
+  round_trip: True
+
+constant_imputation:
+  - column: 'product_category_name'
+    value: 'sem categoria'
 
 # ── 2. Flags Binárias ─────────────────────────────────────────────────────────
 # Identificam valores censurados ou capados no dataset.
 # Esses pontos têm comportamento especial que modelos precisam aprender.
 binary_flags:
   - column_1: "order_estimated_delivery_date"
-  - column_2: "order_delivered_carrier_date"
-  - new_column: "binary_new_column"    # 1 = valor censurado (verdadeiro ≥ $500,001)
+    column_2: "order_delivered_carrier_date"
+    new_column: "bin_delivered_on_time"
+    drop: False
+    strategy: "compare"
+#  - column_1: "order_status"
+#    true_if: "delivered"
+#    new_column: "bin_order_status"
+#    drop: True
+#    strategy: "conditional"
 
 ## ── 3. Features de Razão ──────────────────────────────────────────────────────
 ## Razões são mais informativas que totais absolutos porque normalizam pelo
 ## tamanho do bloco (nº de domicílios). EDA mostrou r=-0.256 para bedrooms_per_room.
-ratio_features:
-  - name: "rooms_per_household"
-    numerator: "total_rooms"
-    denominator: "households"
-  - name: "bedrooms_per_room"
-    numerator: "total_bedrooms"
-    denominator: "total_rooms"
-  - name: "population_per_household"
-    numerator: "population"
-    denominator: "households"
+#ratio_features:
+#  - name: "rooms_per_household"
+#    numerator: "total_rooms"
+#    denominator: "households"
+#  - name: "bedrooms_per_room"
+#    numerator: "total_bedrooms"
+#    denominator: "total_rooms"
+#  - name: "population_per_household"
+#    numerator: "population"
+#    denominator: "households"
 #
 ## ── 4. Transformação Logarítmica (log1p) ──────────────────────────────────────
 ## Features com skewness > 1.5 se beneficiam de log1p:
@@ -105,59 +126,170 @@ ratio_features:
 # Duas representações:
 #   ordinal: distância crescente ao oceano (0=ISLAND, 4=INLAND)
 #   one-hot: dummies explícitas (sem drop_first — mantemos todas para interpretação)
-#categorical_encoding:
-#  column: "ocean_proximity"
-#  ordinal_column: "ocean_proximity_encoded"
-#  ordinal_map:                        # ordem: proximidade ao oceano
-#    "ISLAND":     0
-#    "NEAR BAY":   1
-#    "NEAR OCEAN": 2
-#    "<1H OCEAN":  3
-#    "INLAND":     4
-#  one_hot_prefix: "op"               # → op_INLAND, op_NEAR BAY, etc.
-#  drop_first: false                  # mantém todas as categorias
-#
+categorical_encoding:
+  column: ["product_category_name", "customer_state", "seller_state", "order_status"]
+  ordinal_column:
+  one_hot_prefix: "op"
+  drop_first: false                  # mantém todas as categorias
+
 ## ── 8. Seleção de Features ────────────────────────────────────────────────────
 ## Baseado no ranking do EDA Report (Seção 13 — Priority Feature List).
 ## Colunas brutas de contagem (total_rooms, total_bedrooms, population, households)
 ## são EXCLUÍDAS — substituídas pelas razões e versões log.
 ## O target (median_house_value) é mantido para facilitar o split treino/teste.
-#feature_selection:
-#  target: "median_house_value"
-#  features_to_keep:
-#    # ── Renda (preditor mais forte, r=0.688) ──
-#    - "median_income"
-#    - "log_median_income"
-#    # ── Localização ──
-#    - "latitude"
-#    - "longitude"
-#    - "ocean_proximity_encoded"
-#    - "op_INLAND"
-#    - "op_NEAR BAY"
-#    - "op_NEAR OCEAN"
-#    - "op_<1H OCEAN"
-#    - "op_ISLAND"
-#    # ── Distâncias geográficas ──
-#    - "nearest_city_distance"
-#    - "dist_san_francisco"
-#    - "dist_los_angeles"
-#    - "dist_san_jose"
-#    - "dist_san_diego"
-#    - "dist_sacramento"
-#    # ── Razões de cômodos e ocupação ──
-#    - "bedrooms_per_room"
-#    - "rooms_per_household"
-#    - "population_per_household"
-#    - "log_rooms_per_household"
-#    - "log_population_per_household"
-#    # ── Idade ──
-#    - "housing_median_age"
-#    - "age_at_cap"
-#    # ── Polinomiais e interações ──
-#    - "median_income_squared"
-#    - "housing_median_age_squared"
-#    - "median_income_x_housing_median_age"
-#    # ── Flags ──
-#    - "is_capped_target"
-#    # ── Target ──
-#    - "median_house_value"
+feature_selection:
+  target: "bin_delivered_on_time"
+  features_to_keep:
+#     - "customer_id"
+#     - "order_status"
+     - "order_purchase_timestamp"
+     - "order_approved_at"
+     - "order_delivered_carrier_date"
+     - "order_delivered_customer_date"
+     - "order_estimated_delivery_date"
+#     - "order_item_id"
+#     - "product_id"
+#     - "seller_id"
+     - "shipping_limit_date"
+#     - "price"
+#     - "freight_value"
+#     - "product_category_name"
+#     - "product_name_lenght"
+#     - "product_description_lenght"
+#     - "product_photos_qty"
+#     - "product_weight_g"
+#     - "product_length_cm"
+#     - "product_height_cm"
+#     - "product_width_cm"
+#     - "seller_zip_code_prefix"
+#     - "seller_city"
+#     - "seller_state"
+#     - "customer_unique_id"
+#     - "customer_zip_code_prefix"
+#     - "customer_city"
+#     - "customer_state"
+     - "bin_delivered_on_time"
+     - "product_agro_industria_e_comercio"
+     - "product_alimentos"
+     - "product_alimentos_bebidas"
+     - "product_artes"
+     - "product_artes_e_artesanato"
+     - "product_artigos_de_festas"
+     - "product_artigos_de_natal"
+     - "product_audio"
+     - "product_automotivo"
+     - "product_bebes"
+     - "product_bebidas"
+     - "product_beleza_saude"
+     - "product_brinquedos"
+     - "product_cama_mesa_banho"
+     - "product_casa_conforto"
+     - "product_casa_conforto_2"
+     - "product_casa_construcao"
+     - "product_cds_dvds_musicais"
+     - "product_cine_foto"
+     - "product_climatizacao"
+     - "product_consoles_games"
+     - "product_construcao_ferramentas_construcao"
+     - "product_construcao_ferramentas_ferramentas"
+     - "product_construcao_ferramentas_iluminacao"
+     - "product_construcao_ferramentas_jardim"
+     - "product_construcao_ferramentas_seguranca"
+     - "product_cool_stuff"
+     - "product_dvds_blu_ray"
+     - "product_eletrodomesticos"
+     - "product_eletrodomesticos_2"
+     - "product_eletronicos"
+     - "product_eletroportateis"
+     - "product_esporte_lazer"
+     - "product_fashion_bolsas_e_acessorios"
+     - "product_fashion_calcados"
+     - "product_fashion_esporte"
+     - "product_fashion_roupa_feminina"
+     - "product_fashion_roupa_infanto_juvenil"
+     - "product_fashion_roupa_masculina"
+     - "product_fashion_underwear_e_moda_praia"
+     - "product_ferramentas_jardim"
+     - "product_flores"
+     - "product_fraldas_higiene"
+     - "product_industria_comercio_e_negocios"
+     - "product_informatica_acessorios"
+     - "product_instrumentos_musicais"
+     - "product_la_cuisine"
+     - "product_livros_importados"
+     - "product_livros_interesse_geral"
+     - "product_livros_tecnicos"
+     - "product_malas_acessorios"
+     - "product_market_place"
+     - "product_moveis_colchao_e_estofado"
+     - "product_moveis_cozinha_area_de_servico_jantar_e_jardim"
+     - "product_moveis_decoracao"
+     - "product_moveis_escritorio"
+     - "product_moveis_quarto"
+     - "product_moveis_sala"
+     - "product_musica"
+     - "product_papelaria"
+     - "product_pc_gamer"
+     - "product_pcs"
+     - "product_perfumaria"
+     - "product_pet_shop"
+     - "product_portateis_casa_forno_e_cafe"
+     - "product_portateis_cozinha_e_preparadores_de_alimentos"
+     - "product_relogios_presentes"
+     - "product_seguros_e_servicos"
+     - "product_sem categoria"
+     - "product_sinalizacao_e_seguranca"
+     - "product_tablets_impressao_imagem"
+     - "product_telefonia"
+     - "product_telefonia_fixa"
+     - "product_utilidades_domesticas"
+     - "customer_AC"
+     - "customer_AL"
+     - "customer_AM"
+     - "customer_AP"
+     - "customer_BA"
+     - "customer_CE"
+     - "customer_DF"
+     - "customer_ES"
+     - "customer_GO"
+     - "customer_MA"
+     - "customer_MG"
+     - "customer_MS"
+     - "customer_MT"
+     - "customer_PA"
+     - "customer_PB"
+     - "customer_PE"
+     - "customer_PI"
+     - "customer_PR"
+     - "customer_RJ"
+     - "customer_RN"
+     - "customer_RO"
+     - "customer_RR"
+     - "customer_RS"
+     - "customer_SC"
+     - "customer_SE"
+     - "customer_SP"
+     - "customer_TO"
+     - "seller_AM"
+     - "seller_BA"
+     - "seller_CE"
+     - "seller_DF"
+     - "seller_ES"
+     - "seller_GO"
+     - "seller_MA"
+     - "seller_MG"
+     - "seller_MS"
+     - "seller_MT"
+     - "seller_PA"
+     - "seller_PB"
+     - "seller_PE"
+     - "seller_PI"
+     - "seller_PR"
+     - "seller_RJ"
+     - "seller_RN"
+     - "seller_RO"
+     - "seller_RS"
+     - "seller_SC"
+     - "seller_SE"
+     - "seller_SP"
+     - "order_delivered"

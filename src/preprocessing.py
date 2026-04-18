@@ -40,10 +40,17 @@ Transformadores stateful (fit aprende parâmetros dos dados de treino):
   GroupMedianImputer        → aprende medianas por grupo
   StandardScalerTransformer → aprende média e desvio padrão por coluna
 """
+from dataclasses import replace
+
 import numpy as np
 import pandas as pd
 from typing import Any
+import re
+
+from pandas import Index
 from sklearn.base import BaseEstimator, TransformerMixin
+
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. Imputação por Mediana de Grupo
@@ -190,35 +197,62 @@ class BinaryFlagTransformer(BaseEstimator, TransformerMixin):
         params = ['column_1', 'column_2', 'new_column']
         args = dict()
 
-        # Filtra e unifica parâmetros
-        for _, _line in enumerate(self.flags):
-            if params[_] in self.flags[_]:
-                args.update({params[_]: _line[params[_]]})
+        for spec in self.flags:
+            col_1 = spec['column_1']
+            new_col = spec['new_column']
+            drop = spec['drop']
+            match spec['strategy']:
+                case "compare":
+                    col_2 = spec['column_2']
 
-        col_1, col_2, new_col = args.values()
-        del args, params, _line, _
+                    if not X.columns.__contains__(col_1) or not X.columns.__contains__(col_2):
+                        if self.logger:
+                            self.logger.warning(
+                                "BinaryFlagTransformer: coluna(s) ['%s', '%s'] não encontrada — flag '%s' ignorada.",
+                                col_1, col_2, new_col,
+                            )
 
-        if not X.columns.__contains__(col_1) or not X.columns.__contains__(col_2):
-            if self.logger:
-                self.logger.warning(
-                    "BinaryFlagTransformer: coluna(s) ['%s', '%s'] não encontrada — flag '%s' ignorada.",
-                    col_1, col_2, new_col,
-                )
+                    n_col_values = dict()
+                    for _x in range(len(X)):
 
-        n_col_values = dict()
-        for _x in range(len(X)):
-            value = True if X.get(col_1)[_x] > X.get(col_2)[_x] else False
-            n_col_values.update({_x: value})
+                        value_1 = X.get(col_1)[_x]
+                        value_2 = X.get(col_2)[_x]
 
-        X.insert(len(X.columns), new_col, n_col_values)
+                        if value_1 is not None and value_2 is not None:
 
-        if self.logger:
-            self._log(
-                "BinaryFlagTransformer: '%s > %s' = %s → '%s': %d linhas processadas",
-                col_1, col_2, X[new_col], new_col, len(X[new_col]))
+                            value_1 = np.float64(X.get(col_1)[_x])
+                            value_2 = np.float64(X.get(col_2)[_x])
+
+                            value = True if value_1 > value_2 else False
+                            n_col_values.update({_x: value})
+                    try:
+                        X.insert(len(X.columns), new_col, n_col_values)
+                    except ValueError:
+                        X[new_col] = n_col_values
+
+                    if self.logger:
+                        self._log(
+                            "BinaryFlagTransformer: '%s > %s' = %s → '%s': %d linhas processadas",
+                            col_1, col_2, X[new_col], new_col, len(X[new_col]))
+
+                case "conditional":
+                    true_if = spec['true_if']
+                    n_col_values = dict()
+                    for _x in range(len(X)):
+                        value = True if X.get(col_1)[_x] == true_if else False
+                        n_col_values.update({_x: value})
+                    X.insert(len(X.columns), new_col, n_col_values)
+
+                    if self.logger:
+                        self._log(
+                            "BinaryFlagTransformer: '%s = 'True' if %s → '%s': %d linhas processadas",
+                            col_1, true_if, new_col, len(X[new_col]))
+
+            if drop:
+                X.drop(col_1, axis=1, inplace=True)
 
         return X
-    
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. Features de Razão
 # ─────────────────────────────────────────────────────────────────────────────
@@ -548,46 +582,47 @@ class OceanProximityEncoder(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
-        column = self.enc_config.get("column", "ocean_proximity")
-        ordinal_column = self.enc_config.get("ordinal_column", "ocean_proximity_encoded")
-        ordinal_map: dict = self.enc_config.get("ordinal_map", {})
-        prefix = self.enc_config.get("one_hot_prefix", "op")
-        drop_first: bool = self.enc_config.get("drop_first", False)
-
-        if column not in X.columns:
-            if self.logger:
-                self.logger.warning(
-                    "OceanProximityEncoder: coluna '%s' não encontrada — encoding ignorado.",
-                    column,
-                )
-            return X
-
         X = X.copy()
+        columns = self.enc_config.get("column" )
+        ordinal_column = self.enc_config.get("ordinal_column")
+        for column in iter(columns):
+            ordinal_map: dict = self.enc_config.get("ordinal_map", {})
+            prefix = self.enc_config.get("one_hot_prefix", "op")
+            drop_first: bool = self.enc_config.get("drop_first", False)
 
-        # ── Encoding ordinal ──────────────────────────────────────────────────
-        X[ordinal_column] = X[column].map(ordinal_map)
-        n_unknown = int(X[ordinal_column].isna().sum())
-        if n_unknown > 0 and self.logger:
-            self.logger.warning(
-                "OceanProximityEncoder: %d linhas com valores de '%s' não mapeados → NaN",
-                n_unknown, column,
-            )
-        self._log(
-            "OceanProximityEncoder: ordinal '%s' criado — mapa: %s",
-            ordinal_column, ordinal_map,
-        )
+            if column not in X.columns:
+                if self.logger:
+                    self.logger.warning(
+                        "OceanProximityEncoder: coluna '%s' não encontrada — coluna ignorada.",
+                        column,
+                    )
 
-        # ── One-hot dummies ───────────────────────────────────────────────────
-        dummies = pd.get_dummies(
-            X[column],
-            prefix=prefix,
-            drop_first=drop_first,
-        ).astype(int)
+            X = X.copy()
 
-        X = pd.concat([X, dummies], axis=1)
-        self._log(
-            "OceanProximityEncoder: dummies criadas: %s", list(dummies.columns)
-        )
+            # ── Encoding ordinal ──────────────────────────────────────────────────
+            if len(ordinal_map) > 0:
+                X[ordinal_column] = X[column].map(ordinal_map)
+                n_unknown = int(X[ordinal_column].isna().sum())
+                if n_unknown > 0 and self.logger:
+                    self.logger.warning(
+                        "OceanProximityEncoder: %d linhas com valores de '%s' não mapeados → NaN",
+                        n_unknown, column,
+                    )
+                self._log(
+                    "OceanProximityEncoder: ordinal '%s' criado — mapa: %s",
+                    ordinal_column, ordinal_map,
+                )
+
+            # ── One-hot dummies ───────────────────────────────────────────────────
+            prefix = column.split("_")[0]
+            dummies = pd.get_dummies(
+                X[column],
+                prefix=prefix,
+                drop_first=drop_first,
+            ).astype(int)
+
+            X = pd.concat([X, dummies], axis=1)
+
         return X
     
 # ─────────────────────────────────────────────────────────────────────────────
@@ -710,6 +745,7 @@ class StandardScalerTransformer(BaseEstimator, TransformerMixin):
                 skipped.append(col)
                 continue
 
+            X[col] = X[col].apply(lambda x: float(x)).astype(np.float64)
             mu = float(X[col].mean())
             sigma = float(X[col].std())
 
@@ -767,3 +803,74 @@ class StandardScalerTransformer(BaseEstimator, TransformerMixin):
         return pd.DataFrame(
             {"mean": self.mean_, "std": self.std_}
         ).rename_axis("feature")
+
+class ConditionalImputer(BaseEstimator, TransformerMixin):
+    def __init__(
+        self,
+        cond_imp: Any = None,
+        logger: Any = None,
+    ) -> None:
+        self.cond_imp = cond_imp
+        self.logger = logger
+
+    def fit(self, X: pd.DataFrame, y=None) -> "ConditionalImputer":
+        return self
+    def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
+        X = X.copy()
+
+        target_cols = self.cond_imp['columns']
+        replace_by_cols = self.cond_imp['replace_by']
+
+        # for target_col in iter(target_cols):
+        #     replace_by = replace_by_cols[(target_cols.index(target_col))]
+        #     X[target_col] = (X[target_col].apply(lambda x: x if not np.isnan(x) else Index(X[replace_by]).get_loc(x)[0])
+        #                      .astype(bool))
+
+        X = self._replace(X=X, target_cols=target_cols, replace_by_cols=replace_by_cols)
+
+        round_trip = self.cond_imp['round_trip']
+        if round_trip:
+            X = self._replace(X=X, target_cols=replace_by_cols, replace_by_cols=target_cols)
+
+        return X
+
+    def _replace(self, X: pd.DataFrame, target_cols, replace_by_cols) -> pd.DataFrame:
+        X = X.copy()
+        for target_col in iter(target_cols):
+            replace_by = replace_by_cols[(target_cols.index(target_col))]
+
+            row = []
+            regex = r"^[0-9]+\\.[0-9]+"
+            for index, val in enumerate(X[target_col].values):
+                if val is not None and str(val).upper() != 'NAN':
+                    row.append([val])
+                elif X[replace_by][index] is not None and str(X[replace_by][index]).upper() != 'NAN':
+                    row.append([X[replace_by][index]])
+                else:
+                    row.append([np.nan])
+
+            X[target_col] = np.array(row).astype(str)
+            X[target_col] = X[target_col].apply(lambda x: float(x)).astype(float)
+
+        return X
+
+class ConstantImputer(BaseEstimator, TransformerMixin):
+    def __init__(
+        self,
+        const_specs: Any = None,
+        logger: Any = None,
+    ) -> None:
+        self.const_specs = const_specs
+        self.logger = logger
+
+    def transform(self, X: pd.DataFrame, y=None) -> pd.DataFrame:
+        X = X.copy()
+        for spec in self.const_specs:
+            if (spec['column'] is not None
+                    and spec['value'] is not None):
+                column = spec['column']
+                replace_by = spec['value']
+                self.logger.info('Valores ausentes coluna \'%s\' -> %d', column, X[column].isnull().sum())
+                X[column] = X[column].apply(lambda x: x if x is not None else replace_by)
+                self.logger.info('Valores após imputer coluna \'%s\' -> %d', column, X[column].isnull().sum())
+        return X

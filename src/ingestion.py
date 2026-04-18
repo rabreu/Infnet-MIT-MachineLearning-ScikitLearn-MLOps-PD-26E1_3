@@ -16,7 +16,6 @@ def ingest_csv_to_parquet(
     raw_dir: Path,
     output_path: Path,
     compression: str = "snappy",
-    engine: str = "pyarrow",
     chunk_size_rows: int = 50_000,
     validate_schema: bool = True,
     required_columns: list[str] | None = None,
@@ -130,25 +129,13 @@ def ingest_csv_to_parquet(
                 logger.info("Schema: %d column(s) - %s", len(schema), schema.names)
 
                 for batch in reader:
-                    p_csv.write_csv(data=batch, output_file=raw_dir / csv_path.name)
+
+                    # Lê CSV Original (raw)
+                    csv_to_parquet = pd.read_csv(raw_dir / csv_path.name)
+
+                    # Converte e copia para o diretório de destino
                     output_csv = output_path / csv_path.name.replace('.csv', '.parquet')
-
-                    # # Initialize writer on every file (schema drives the output)
-                    # writer = pq.ParquetWriter(
-                    #     output_csv,
-                    #     schema=schema,
-                    #     compression=compression,
-                    #     writer_engine_version=engine,
-                    #     use_dictionary=True,
-                    #     write_page_index=True,
-                    #     data_page_version='2.0',
-                    #     store_schema=True,
-                    # )
-                    #
-                    # writer.write_batch(batch)
-
-                    csv = pd.read_csv(csv_path)
-                    csv.to_parquet(path=output_csv, compression=compression)
+                    csv_to_parquet.to_parquet(path=output_csv, compression="snappy")
 
                     file_rows += batch.num_rows
                     total_rows += batch.num_rows
@@ -225,12 +212,15 @@ def join_tables(dfs: dict, logger: Any) -> DataFrame:
     return join_order_order_items
 
 def convert_column(df: DataFrame, columns: list, convert_to: str, *dt_format: str, logger: Any) -> DataFrame:
+    df = df.copy()
     match convert_to.upper():
         case('DATETIME_TO_STR_NUMBER'):
             if dt_format:
                 df = _convert_from_datetime_to_str_number(df, columns, dt_format[0], logger)
-        case('INT_16'):
-            df = __convert_str_to_int16(df, columns)
+        case('NUMERIC'):
+            df = __convert_str_to_numeric(df, columns)
+        case('HEX_TO_DECIMAL'):
+            df = _convert_from_hex_to_decimal(df, columns, logger)
     return df
 
 def _convert_from_datetime_to_str_number(df: DataFrame, cols: list, dt_format: str, logger: Any) -> DataFrame:
@@ -239,11 +229,13 @@ def _convert_from_datetime_to_str_number(df: DataFrame, cols: list, dt_format: s
     for _ in cols:
         logger.info(f"Converting '{_}' - from DATETIME to numeric STRING...")
         logger.info(f"  [READING] '{_}'...")
-        df[_] = np.array(df[_].apply(
-            lambda dt: str(datetime.strptime(dt, dt_format).toordinal()) if not pd.isna(dt) else np.nan)
-                 .astype(str))
-        # loc = df.columns.get_loc(_)
-        # df[_] = np.array(df.iloc[0:,loc:loc+1]).astype(np.uint64)
+        try:
+            df[_] = np.array(df[_].apply(
+                lambda dt: str(datetime.strptime(dt, dt_format).toordinal()) if not pd.isna(dt) else np.nan)
+                     .astype(str))
+        except ValueError:
+            logger.info(f"  [ERROR] '{_}' - from DATETIME to numeric STRING: {dt_format} doesnt match for {_}.")
+            break
         logger.info(f"  [OK] '{_}' - {len(df[_])}")
     return df
 
@@ -255,10 +247,20 @@ def _convert_columns(df: DataFrame, cols: list, function) -> DataFrame:
             _ar.update({_col: int(function(_col))})
     return df
 
-def __convert_str_to_int16(df: DataFrame, cols: list) -> DataFrame:
+def __convert_str_to_numeric(df: DataFrame, cols: list) -> DataFrame:
     df = df.copy()
     for _ in cols:
-        df[_] = np.array(df[cols[_]]).astype(int)
+        df[_] = np.array(df[cols[_]]).astype(str)
+    return df
+
+def _convert_from_hex_to_decimal(df: DataFrame, cols: list, logger) -> DataFrame:
+    df = df.copy()
+    for _ in cols:
+        logger.info(f"Converting '{_}' - from HEX to DECIMAL...")
+        logger.info(f"  [READING] '{_}'...")
+        df[_] = df[_].apply(lambda x: np.array(int(x, 16)).astype(str))
+        logger.info(f"Converting '{_}' - from HEX to DECIMAL...")
+        logger.info(f"  [READING] '{_}'...")
     return df
 
 def _validate_required_columns(

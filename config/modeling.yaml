@@ -31,20 +31,171 @@
 
 pipeline:
   imputation:
-    - column: ""
+    - column: "product_weight_g"
       strategy: "group_median"
-      group_by: ""
+      group_by: "product_weight_g"
+    - column: "order_delivered_customer_date"
+      strategy: "group_median"
+      group_by: "order_delivered_customer_date"
+    - column: "order_delivered_carrier_date"
+      strategy: "group_median"
+      group_by: "order_delivered_carrier_date"
 
   scaling:
     columns:
-        - "order_purchase_timestamp"
-        - "order_approved_at"
-        - "order_delivered_carrier_date"
-        - "order_delivered_customer_date"
-        - "order_estimated_delivery_date"
-        - "shipping_limit_date"
-        - "price"
-
+#     - "customer_id"
+#     - "order_status"
+     - "order_purchase_timestamp"
+     - "order_approved_at"
+     - "order_delivered_carrier_date"
+     - "order_delivered_customer_date"
+     - "order_estimated_delivery_date"
+#     - "order_item_id"
+#     - "product_id"
+#     - "seller_id"
+     - "shipping_limit_date"
+#     - "price"
+#     - "freight_value"
+#     - "product_category_name"
+#     - "product_name_lenght"
+#     - "product_description_lenght"
+#     - "product_photos_qty"
+#     - "product_weight_g"
+#     - "product_length_cm"
+#     - "product_height_cm"
+#     - "product_width_cm"
+#     - "seller_zip_code_prefix"
+#     - "seller_city"
+#     - "seller_state"
+#     - "customer_unique_id"
+#     - "customer_zip_code_prefix"
+#     - "customer_city"
+#     - "customer_state"
+     - "bin_delivered_on_time"
+     - "product_agro_industria_e_comercio"
+     - "product_alimentos"
+     - "product_alimentos_bebidas"
+     - "product_artes"
+     - "product_artes_e_artesanato"
+     - "product_artigos_de_festas"
+     - "product_artigos_de_natal"
+     - "product_audio"
+     - "product_automotivo"
+     - "product_bebes"
+     - "product_bebidas"
+     - "product_beleza_saude"
+     - "product_brinquedos"
+     - "product_cama_mesa_banho"
+     - "product_casa_conforto"
+     - "product_casa_conforto_2"
+     - "product_casa_construcao"
+     - "product_cds_dvds_musicais"
+     - "product_cine_foto"
+     - "product_climatizacao"
+     - "product_consoles_games"
+     - "product_construcao_ferramentas_construcao"
+     - "product_construcao_ferramentas_ferramentas"
+     - "product_construcao_ferramentas_iluminacao"
+     - "product_construcao_ferramentas_jardim"
+     - "product_construcao_ferramentas_seguranca"
+     - "product_cool_stuff"
+     - "product_dvds_blu_ray"
+     - "product_eletrodomesticos"
+     - "product_eletrodomesticos_2"
+     - "product_eletronicos"
+     - "product_eletroportateis"
+     - "product_esporte_lazer"
+     - "product_fashion_bolsas_e_acessorios"
+     - "product_fashion_calcados"
+     - "product_fashion_esporte"
+     - "product_fashion_roupa_feminina"
+     - "product_fashion_roupa_infanto_juvenil"
+     - "product_fashion_roupa_masculina"
+     - "product_fashion_underwear_e_moda_praia"
+     - "product_ferramentas_jardim"
+     - "product_flores"
+     - "product_fraldas_higiene"
+     - "product_industria_comercio_e_negocios"
+     - "product_informatica_acessorios"
+     - "product_instrumentos_musicais"
+     - "product_la_cuisine"
+     - "product_livros_importados"
+     - "product_livros_interesse_geral"
+     - "product_livros_tecnicos"
+     - "product_malas_acessorios"
+     - "product_market_place"
+     - "product_moveis_colchao_e_estofado"
+     - "product_moveis_cozinha_area_de_servico_jantar_e_jardim"
+     - "product_moveis_decoracao"
+     - "product_moveis_escritorio"
+     - "product_moveis_quarto"
+     - "product_moveis_sala"
+     - "product_musica"
+     - "product_papelaria"
+     - "product_pc_gamer"
+     - "product_pcs"
+     - "product_perfumaria"
+     - "product_pet_shop"
+     - "product_portateis_casa_forno_e_cafe"
+     - "product_portateis_cozinha_e_preparadores_de_alimentos"
+     - "product_relogios_presentes"
+     - "product_seguros_e_servicos"
+     - "product_sem categoria"
+     - "product_sinalizacao_e_seguranca"
+     - "product_tablets_impressao_imagem"
+     - "product_telefonia"
+     - "product_telefonia_fixa"
+     - "product_utilidades_domesticas"
+     - "customer_AC"
+     - "customer_AL"
+     - "customer_AM"
+     - "customer_AP"
+     - "customer_BA"
+     - "customer_CE"
+     - "customer_DF"
+     - "customer_ES"
+     - "customer_GO"
+     - "customer_MA"
+     - "customer_MG"
+     - "customer_MS"
+     - "customer_MT"
+     - "customer_PA"
+     - "customer_PB"
+     - "customer_PE"
+     - "customer_PI"
+     - "customer_PR"
+     - "customer_RJ"
+     - "customer_RN"
+     - "customer_RO"
+     - "customer_RR"
+     - "customer_RS"
+     - "customer_SC"
+     - "customer_SE"
+     - "customer_SP"
+     - "customer_TO"
+     - "seller_AM"
+     - "seller_BA"
+     - "seller_CE"
+     - "seller_DF"
+     - "seller_ES"
+     - "seller_GO"
+     - "seller_MA"
+     - "seller_MG"
+     - "seller_MS"
+     - "seller_MT"
+     - "seller_PA"
+     - "seller_PB"
+     - "seller_PE"
+     - "seller_PI"
+     - "seller_PR"
+     - "seller_RJ"
+     - "seller_RN"
+     - "seller_RO"
+     - "seller_RS"
+     - "seller_SC"
+     - "seller_SE"
+     - "seller_SP"
+     - "order_delivered"
 
 # ── Redução de Features (via FeatureReducer — src/feature_reducer.py) ─────────
 #
@@ -131,7 +282,7 @@ holdout:
 # KFold simples é suficiente para regressão com dados i.i.d.
 # n_splits=5 equilibra variância da estimativa e custo computacional.
 cv:
-  strategy: "kfold"                 # kfold | stratified_kfold
+  strategy: "stratified_kfold"                 # kfold | stratified_kfold
   n_splits: 3
   shuffle: true
 
@@ -174,7 +325,7 @@ models:
     default_params: {}              # sem search_space → apenas baseline
 
   ridge:
-    enabled: false
+    enabled: true
     module: "sklearn.linear_model"
     class: "Ridge"
     default_params:
@@ -186,7 +337,7 @@ models:
         high: 1.0e4
 
   lasso:
-    enabled: false
+    enabled: true
     module: "sklearn.linear_model"
     class: "Lasso"
     default_params:
@@ -202,7 +353,7 @@ models:
   # max_depth controla profundidade máxima (sem limite = risco de overfitting).
   # min_samples_split e min_samples_leaf regularizam a divisão dos nós.
   decision_tree:
-    enabled: false
+    enabled: true
     module: "sklearn.tree"
     class: "DecisionTreeRegressor"
     default_params:
@@ -214,8 +365,8 @@ models:
         high: 20
       min_samples_split:
         type: "int"
-        low: 2
-        high: 50
+        low: 5
+        high: 10
       min_samples_leaf:
         type: "int"
         low: 1
@@ -229,7 +380,7 @@ models:
   # n_neighbors é o hiperparâmetro mais importante.
   # metric=minkowski + p=2 equivale à distância euclidiana.
   knn:
-    enabled: false
+    enabled: true
     module: "sklearn.neighbors"
     class: "KNeighborsRegressor"
     default_params:
@@ -258,7 +409,7 @@ models:
   # C: inverso da regularização (C alto = menos regularização = mais flexível)
   # epsilon: margem de insensibilidade (erros < epsilon são ignorados)
   svr:
-    enabled: false
+    enabled: true
     module: "sklearn.svm"
     class: "SVR"
     default_params:
@@ -269,7 +420,7 @@ models:
     search_space:
       kernel:
         type: "categorical"
-        choices: ["rbf", "poly", "linear"]
+        choices: ["linear"]  # "rbf", "poly", "linear"
       C:
         type: "log_float"
         low: 0.1
@@ -286,7 +437,7 @@ models:
   # Ensemble de árvores independentes — baixa correlação entre elas é essencial.
   # max_features como fração controla a diversidade entre as árvores.
   random_forest:
-    enabled: false
+    enabled: true
     module: "sklearn.ensemble"
     class: "RandomForestRegressor"
     default_params:
@@ -315,7 +466,7 @@ models:
   # Boosting sequencial — cada árvore corrige os erros da anterior.
   # learning_rate e n_estimators são inversamente relacionados (shrinkage).
   gradient_boosting:
-    enabled: false
+    enabled: true
     module: "sklearn.ensemble"
     class: "GradientBoostingRegressor"
     default_params:
@@ -347,7 +498,7 @@ models:
   # Gradient boosting otimizado com regularização L1/L2 e column subsampling.
   # reg_alpha (L1) induz esparsidade; colsample_bytree reduz correlação entre árvores.
   xgboost:
-    enabled: false
+    enabled: true
     module: "xgboost"
     class: "XGBRegressor"
     default_params:
@@ -385,7 +536,7 @@ models:
   # Gradient boosting baseado em histogramas — mais rápido que XGBoost em datasets
   # grandes. num_leaves controla a complexidade da árvore (leaf-wise growth).
   lightgbm:
-    enabled: false
+    enabled: true
     module: "lightgbm"
     class: "LGBMRegressor"
     default_params:
@@ -433,7 +584,7 @@ ensembles:
   top_n_base_models: 3              # usa os N melhores individuais como base
 
   stacking:
-    enabled: false
+    enabled: true
     inner_cv_folds: 3               # CV interno do stacking (3 para velocidade)
     meta_learner_search_space:
       meta_alpha:

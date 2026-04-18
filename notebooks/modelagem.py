@@ -198,13 +198,14 @@ def _build_pipeline(
     # ── Imputação (stateful — aprende medianas só no treino) ──────────────────
     for imp_spec in pipe_cfg.get('imputation', []):
         step_name = f"imputer_{imp_spec['column'].replace('/', '_')}"
-        steps.append((
-            step_name,
-            GroupMedianImputer(
-                group_col=imp_spec['group_by'],
-                target_col=imp_spec['column'],
-            ),
-        ))
+        # steps.append((
+        #     step_name,
+        #     GroupMedianImputer(
+        #         group_col=imp_spec['group_by'],
+        #         target_col=imp_spec['column'],
+        #         logger=logger,
+        #     ),
+        # ))
 
     # ── Escalonamento (stateful — aprende μ/σ só no treino) ──────────────────
     scale_cols = pipe_cfg.get('scaling', {}).get('columns', [])
@@ -267,7 +268,7 @@ def _get_feature_importance(
             n_repeats=5, random_state=42, n_jobs=-1,
         )
         return pd.Series(r.importances_mean, index=feature_names)
-    
+
 # %%
 # ─────────────────────────────────────────────────────────────────────────────
 # Carregamento das Configurações
@@ -356,8 +357,11 @@ logger.info('Feature reducer : method=%s', feat_red_cfg.get('method', 'none'))
 # ─────────────────────────────────────────────────────────────────────────────
 
 # %%
-features_dir  = ROOT_DIR / config.get('paths', {}).get('features_data_dir', 'data/features')
-features_file = features_dir / config.get('paths', {}).get('features_filename')
+prepro_cfg = load_yaml(CONFIG_DIR / 'preprocessing.yaml')
+preprocessing = prepro_cfg.get('preprocessing')
+features_dir = ROOT_DIR / preprocessing['processed_data_dir'] / preprocessing['output_dir']
+
+features_file = features_dir / preprocessing['output_filename']
 
 logger.info('─' * 60)
 logger.info('SEÇÃO 1: Carregar Features')
@@ -384,8 +388,8 @@ logger.info('Shape: %s', df.shape)
 # %%
 # Separa features (X) e target (y)
 # target vem do config de seleção de features do preprocessing.yaml
-sel_cfg    = config.get('feature_selection', {})
-target_col = sel_cfg.get('target', 'median_house_value')
+sel_cfg    = config['feature_selection']
+target_col = sel_cfg.get('target')
 
 feature_cols = [c for c in df.columns if c != target_col]
 X = df[feature_cols].copy()
