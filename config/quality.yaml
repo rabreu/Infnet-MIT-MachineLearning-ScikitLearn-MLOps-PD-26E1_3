@@ -24,8 +24,8 @@ table_expectations:
   # O dataset deve ter entre 5.000 e 25.000 linhas
   - type: expect_table_row_count_to_be_between
     kwargs:
-      min_value: 100000
-      max_value: 120000
+      min_value: 40000
+      max_value: 50000
 
   # Garante que o schema não mudou — nenhuma coluna foi adicionada ou removida
   - type: expect_table_columns_to_match_set

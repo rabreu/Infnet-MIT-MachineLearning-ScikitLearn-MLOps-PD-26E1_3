@@ -147,8 +147,8 @@ logger.info(df.head())
 
 # Estatísticas descritivas e nulos — baseline antes do pré-processamento
 logger.info('Valores ausentes por coluna:')
-for n_col,col in enumerate(df.columns):
-    logger.info('  %d %s %s', n_col, col, df[col].hasnans)
+for col, n_null in df.isna().sum()[df.isna().sum() > 0].items():
+    logger.info('  %-25s %d (%.2f%%)', col, n_null, 100 * n_null / len(df))
 
 # %%
 logger.info(df.describe())
@@ -170,7 +170,10 @@ logger.info(df.describe())
 # # Confirma visualmente: NaN presentes (serão tratados no pipeline)
 # df[['total_bedrooms', 'ocean_proximity']].describe()
 
-
+# %%
+# ─────────────────────────────────────────────────────────────────────────────
+# SEÇÃO 1: Constant Imputation
+# ─────────────────────────────────────────────────────────────────────────────
 const_specs = config.get('constant_imputation', [])
 logger.info('─' * 60)
 logger.info('SEÇÃO 1: Constant Imputation')
@@ -178,6 +181,11 @@ logger.info('Especificações (para referência): %s', const_specs)
 constant_imputation = ConstantImputer(const_specs=const_specs, logger=logger)
 df = constant_imputation.transform(df)
 
+
+# %%
+# ─────────────────────────────────────────────────────────────────────────────
+# SEÇÃO 2: Conditional Imputation
+# ─────────────────────────────────────────────────────────────────────────────
 cond_imp = config.get('conditional_imputation', [])
 logger.info('─' * 60)
 logger.info('SEÇÃO 2: Conditional Imputation')
@@ -185,9 +193,14 @@ logger.info('Especificações (para referência): %s', cond_imp)
 conditional_imputer = ConditionalImputer(cond_imp=cond_imp, logger=logger)
 df = conditional_imputer.transform(df)
 
+
+# %%
+# ─────────────────────────────────────────────────────────────────────────────
+# SEÇÃO 3: Group Imputation
+# ─────────────────────────────────────────────────────────────────────────────
 group_imp = config.get('group_imputation')
 logger.info('─' * 60)
-logger.info('SEÇÃO 1: Constant Imputation')
+logger.info('SEÇÃO 3: Group Imputation')
 logger.info('Especificações (para referência): %s', group_imp)
 for line in iter(group_imp):
     group_transformer = GroupMedianImputer(group_col=line['group_by'], target_col=line['column'], logger=logger)
@@ -196,13 +209,13 @@ for line in iter(group_imp):
 
 # %%
 # ─────────────────────────────────────────────────────────────────────────────
-# SEÇÃO 3 — Flags Binárias
+# SEÇÃO 4 — Flags Binárias
 # ─────────────────────────────────────────────────────────────────────────────
 
 # %%
 flags_cfg = config.get('binary_flags', [])
 logger.info('─' * 60)
-logger.info('SEÇÃO 3: Flags Binárias')
+logger.info('SEÇÃO 4: Flags Binárias')
 
 # %%
 # Instancia e aplica o transformador de flags (stateless — fit é no-op)
@@ -398,7 +411,7 @@ for flag in flags_cfg:
 # %%
 enc_cfg = config.get('categorical_encoding', {})
 logger.info('─' * 60)
-logger.info('SEÇÃO 8: Encoding de  Variável Categórica')
+logger.info('SEÇÃO 5: Encoding de  Variável Categórica')
 logger.info('Mapa ordinal: %s', enc_cfg.get('ordinal_map'))
 
 # %%

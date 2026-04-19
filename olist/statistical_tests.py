@@ -668,12 +668,14 @@ def run(config: dict, base_dir: Path) -> dict:
             "Install with: pip install statsmodels"
         )
 
-    dirs = _ensure_output_dirs(base_dir, config)
-    stats_dir = dirs["stats_dir"]
-    data_path = base_dir / config.get("paths", {}).get(
-        "input_data", "data/processed/house_price.parquet"
-    )
+    # dirs = _ensure_output_dirs(base_dir, config)
+    # stats_dir = dirs["stats_dir"]
+    # data_path = base_dir / config.get("paths", {}).get(
+    #     "input_data", "data/processed/house_price.parquet"
+    # )
 
+    olist = config["olist"]
+    data_path = olist['paths']['input_data']
     try:
         df_raw = _load_data(data_path, logger)
     except FileNotFoundError as exc:

@@ -2,7 +2,7 @@
 # Controls execution behavior, output paths, and logging
 
 pipeline:
-  name: "olist-brazilian-ecommerce"
+  name: ["order_estimated_delivery_date", "order_delivered_carrier_date"]
   version: "1.0.0"
   description: "Pipeline de ingestão dos dados de preços de imóveis (House Price — Kaggle)"
 
@@ -13,9 +13,9 @@ paths:
   output_dir: "ingestion/"
 
 execution:
-  skip_download_if_exists: true
+  skip_download_if_exists: false
   skip_ingest_if_exists: false
-  force_redownload: false
+  force_redownload: true
   force_ingest: true
 
 feature_selection:

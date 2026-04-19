@@ -614,7 +614,7 @@ class OceanProximityEncoder(BaseEstimator, TransformerMixin):
                 )
 
             # ── One-hot dummies ───────────────────────────────────────────────────
-            prefix = column.split("_")[0]
+            prefix = prefix + "_" + column.split("_")[0]
             dummies = pd.get_dummies(
                 X[column],
                 prefix=prefix,
@@ -838,9 +838,10 @@ class ConditionalImputer(BaseEstimator, TransformerMixin):
         X = X.copy()
         for target_col in iter(target_cols):
             replace_by = replace_by_cols[(target_cols.index(target_col))]
+            n_before = X[target_col].isnull().sum()
 
             row = []
-            regex = r"^[0-9]+\\.[0-9]+"
+            # regex = r"^[0-9]+\\.[0-9]+" ## Debug
             for index, val in enumerate(X[target_col].values):
                 if val is not None and str(val).upper() != 'NAN':
                     row.append([val])
@@ -849,8 +850,14 @@ class ConditionalImputer(BaseEstimator, TransformerMixin):
                 else:
                     row.append([np.nan])
 
+
             X[target_col] = np.array(row).astype(str)
             X[target_col] = X[target_col].apply(lambda x: float(x)).astype(float)
+
+            self.logger.info(
+                "ConditionalImputer.transform: '%s' — NaN antes=%d, depois=%d",
+                target_col, n_before, X[target_col].isnull().sum(),
+            )
 
         return X
 
@@ -870,7 +877,10 @@ class ConstantImputer(BaseEstimator, TransformerMixin):
                     and spec['value'] is not None):
                 column = spec['column']
                 replace_by = spec['value']
-                self.logger.info('Valores ausentes coluna \'%s\' -> %d', column, X[column].isnull().sum())
+                n_before = X[column].isnull().sum()
                 X[column] = X[column].apply(lambda x: x if x is not None else replace_by)
-                self.logger.info('Valores após imputer coluna \'%s\' -> %d', column, X[column].isnull().sum())
+                self.logger.info(
+                    "ConstantImputer.transform: '%s' — NaN antes=%d, depois=%d",
+                    column, n_before, X[column].isnull().sum(),
+                )
         return X

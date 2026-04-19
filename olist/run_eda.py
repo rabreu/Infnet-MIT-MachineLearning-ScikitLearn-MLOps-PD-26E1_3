@@ -30,6 +30,7 @@ import json
 import sys
 import time
 import traceback
+from os import listdir
 from pathlib import Path
 from typing import Any
 
@@ -177,13 +178,15 @@ def run_eda(
 
     # ── Load configuration ───────────────────────────────────────────────────
     logger.info("=" * 70)
-    logger.info("California Housing EDA Pipeline — Starting")
+    logger.info("Pipeline — Starting")
     logger.info(f"Base directory : {base_dir}")
     logger.info(f"Config directory: {config_dir}")
     logger.info("=" * 70)
 
     try:
-        config = load_config(config_dir)
+        config = dict()
+        for file in listdir(config_dir):
+            config.update({file.replace('.yaml', ''): load_config(config_dir / file)})
         logger.info(
             f"Configuration loaded — EDA version: "
             f"{config.get('olist', {}).get('version', 'unknown')}"

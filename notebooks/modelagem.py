@@ -35,10 +35,15 @@ import importlib
 import sys
 import time
 import warnings
+from encodings import utf_8
+from idlelib.iomenu import encoding
+from os import write
 
 import matplotlib
 import numpy as np
 import pandas as pd
+from mlflow.entities.model_registry import model_version
+from mlflow.store.model_registry.abstract_store import AWAIT_MODEL_VERSION_CREATE_SLEEP_INTERVAL_SECONDS
 
 matplotlib.use('Agg')           # backend não-interativo: salva em arquivo sem abrir janela
 from pathlib import Path
@@ -170,6 +175,7 @@ def _build_pipeline(
     model_params: dict | None,
     reducer_params: dict | None,
     pipe_cfg: dict,
+    model_version: str,
 ) -> SklearnPipeline:
     """
     Constrói um sklearn Pipeline leak-free para um modelo:
@@ -545,8 +551,8 @@ logger.info('Feature reducer: method=%s  params=%s', _red_method, _default_reduc
 
 # %%
 # Cria o objeto de CV a partir do config
-n_splits = cv_cfg.get('n_splits', 5)
-shuffle  = cv_cfg.get('shuffle', True)
+n_splits = cv_cfg.get('n_splits')
+shuffle  = cv_cfg.get('shuffle')
 
 cv = KFold(n_splits=n_splits, shuffle=shuffle, random_state=SEED)
 logger.info('─' * 60)
@@ -556,6 +562,32 @@ logger.info('SEÇÃO 4: Baseline CV  (%s, %d folds)', cv_cfg.get('strategy', 'kf
 # Dicionário central de resultados:
 # {model_name: {cv_rmse_mean, cv_rmse_std, ..., fold_metrics, model_cfg, best_params, tuned}}
 all_results: dict[str, dict] = {}
+
+# %%
+# Versionamento modelo
+
+# ================
+# 1.0.3
+# a.b.c
+# ================
+try:
+    version_file = open("./mlruns/version_tag", "r+", encoding="utf-8")
+    if version_file is not None:
+        abc_version = version_file.read()
+        a_version = str(abc_version).split(".")[0]
+        b_version = str(abc_version).split(".")[1]
+        c_version = str(abc_version).split(".")[2]
+        c_version = int(c_version) + 1
+
+        new_version = f'{a_version}.{b_version}.{c_version}'
+
+        version_file.seek(0,0)
+
+        version_file.write(new_version)
+        version_file.close()
+
+except Exception as e:
+    print(e)
 
 # %%
 # Loop de baseline — um MLFlow run por modelo
@@ -570,6 +602,7 @@ for model_name, model_cfg in models_cfg.items():
         model_params = None,
         reducer_params = _default_reducer_params(),
         pipe_cfg    = pipe_cfg,
+        model_version = new_version
     )
     t0 = time.time()
 
@@ -598,8 +631,18 @@ for model_name, model_cfg in models_cfg.items():
 
         # Agrega e loga métricas consolidadas
         agg = _aggregate_fold_metrics(fold_metrics)
+
         mlflow.log_metrics(agg)
         mlflow.log_metric('training_time_s', time.time() - t0)
+
+    try:
+        register_model_name = f'{model_name}_{new_version}'
+        register = mlflow.register_model("http://127.0.0.1:5000/", name=model_name, tags={'version': new_version})
+        mlflow.set_model_version_tag(name=register.name, version=register.version, key='version', value=new_version)
+        mlflow.set_experiment_tag('version', new_version)
+    except Exception as e:
+        print("Não foi possível realizar o versionamento no MLflow. Verifique se o serviço está disponível.")
+
 
     all_results[model_name] = {
         **agg,

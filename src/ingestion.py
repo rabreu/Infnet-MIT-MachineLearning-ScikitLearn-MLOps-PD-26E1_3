@@ -130,8 +130,8 @@ def ingest_csv_to_parquet(
 
                 for batch in reader:
 
-                    # Lê CSV Original (raw)
-                    csv_to_parquet = pd.read_csv(raw_dir / csv_path.name)
+                    # Lê CSV Original (raw) com limite definido no arquivo data.yaml
+                    csv_to_parquet = pd.read_csv(raw_dir / csv_path.name, nrows=chunk_size_rows)
 
                     # Converte e copia para o diretório de destino
                     output_csv = output_path / csv_path.name.replace('.csv', '.parquet')

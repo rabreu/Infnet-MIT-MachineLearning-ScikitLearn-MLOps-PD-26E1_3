@@ -13,7 +13,7 @@ kaggle:
 
 ingest:
   compression: "snappy"
-  chunk_size_rows: 5000
+  chunk_size_rows: 50000
   convert_dtypes: true
   validate_schema: true
 
