@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 from dotenv import load_dotenv
 from src.utils.logger import get_logger
+import zipfile as zip
 
 
 def check_kaggle_credentials(secrets_path: str) -> bool:
@@ -120,6 +121,7 @@ def download_dataset(
         raise RuntimeError(f"Kaggle API authentication failed: {exc}") from exc
 
     downloaded: list[Path] = []
+    api.dataset_list_files(dataset=dataset)
     for filename in expected_files:
         dest_path = destination_dir / filename
         if not force and skip_if_exists and dest_path.exists() and dest_path.stat().st_size > 0:
@@ -143,9 +145,13 @@ def download_dataset(
 
         # Handle generic zip extraction: Kaggle may return {filename}.zip
         # regardless of the original file extension (e.g., .csv.zip, .parquet.zip)
-        zip_path = Path(str(dest_path) + ".zip")
-        if zip_path.exists() and not dest_path.exists():
-            _unzip_file(zip_path, destination_dir, logger)
+        if zip.is_zipfile(dest_path):
+            zip_file = Path((str(dest_path) + ".zip"))
+            if zip_file.exists():
+                zip_file.unlink()
+            zip_file = dest_path.rename(str(dest_path) + ".zip")
+            if zip_file.exists() and (not dest_path.exists() or not skip_if_exists):
+                _unzip_file(zip_file, destination_dir, logger)
 
         if dest_path.exists():
             size = dest_path.stat().st_size
