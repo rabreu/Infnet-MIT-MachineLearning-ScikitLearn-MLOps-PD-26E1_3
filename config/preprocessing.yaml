@@ -1,0 +1,295 @@
+# preprocessing.yaml — Configuração de Pré-processamento e Feature Engineering
+#
+# Princípio MLOps: separação entre política (YAML) e mecanismo (código).
+# Para ajustar qualquer transformação, edite apenas este arquivo.
+# O código em src/preprocessing.py não precisa mudar.
+#
+# Pipeline: data/processed/house_price.parquet
+#        → data/features/house_price_features.parquet
+
+# ── Saída ──────────────────────────────────────────────────────────────────────
+preprocessing:
+  processed_data_dir: "dataset/processed/"
+  output_dir: "features/"
+  output_filename: "olist_ecommerce_features.parquet"
+  compression: "snappy"
+
+# ── 1. Imputação de Valores Ausentes ──────────────────────────────────────────
+# total_bedrooms tem ~1% de NaN. Imputamos com a mediana por ocean_proximity
+# porque a distribuição é assimétrica (nunca usar média em features skewed)
+# e porque o preço dos imóveis varia muito por localização.
+#imputation:
+#    column: "product_photos_qty"
+#    strategy: "median"       # median | mean | constant
+#    group_by: "product_category_name"
+
+group_imputation:
+  - column: "product_weight_g"
+    group_by: "product_weight_g"
+
+conditional_imputation:
+  columns: ["order_delivered_carrier_date", "order_approved_at"]
+  replace_by: ["order_delivered_customer_date", "order_purchase_timestamp"]
+  round_trip: True
+
+constant_imputation:
+  - column: 'product_category_name'
+    value: 'sem categoria'
+
+# ── 2. Flags Binárias ─────────────────────────────────────────────────────────
+# Identificam valores censurados ou capados no dataset.
+# Esses pontos têm comportamento especial que modelos precisam aprender.
+binary_flags:
+  - column_1: "order_estimated_delivery_date"
+    column_2: "order_delivered_carrier_date"
+    new_column: "bin_delivered_on_time"
+    drop: False
+    strategy: "compare"
+#  - column_1: "order_status"
+#    true_if: "delivered"
+#    new_column: "bin_order_status"
+#    drop: True
+#    strategy: "conditional"
+
+## ── 3. Features de Razão ──────────────────────────────────────────────────────
+## Razões são mais informativas que totais absolutos porque normalizam pelo
+## tamanho do bloco (nº de domicílios). EDA mostrou r=-0.256 para bedrooms_per_room.
+#ratio_features:
+#  - name: "rooms_per_household"
+#    numerator: "total_rooms"
+#    denominator: "households"
+#  - name: "bedrooms_per_room"
+#    numerator: "total_bedrooms"
+#    denominator: "total_rooms"
+#  - name: "population_per_household"
+#    numerator: "population"
+#    denominator: "households"
+#
+## ── 4. Transformação Logarítmica (log1p) ──────────────────────────────────────
+## Features com skewness > 1.5 se beneficiam de log1p:
+##   - normaliza a distribuição
+##   - reduz o impacto de outliers extremos
+##   - melhora a linearidade com o target
+## log1p(x) = log(1+x) — seguro para x=0
+## Colunas originais são mantidas; colunas log_ são adicionadas.
+#log_transform:
+#  columns:
+#    - "total_rooms"             # skew=4.15
+#    - "total_bedrooms"          # skew=3.46
+#    - "population"              # skew=4.94
+#    - "households"              # skew=3.41
+#    - "median_income"           # skew=1.65
+#    - "rooms_per_household"     # derivada de skewed features
+#    - "population_per_household"
+#
+## ── 5. Distâncias Geográficas (Euclidiana em graus) ───────────────────────────
+## Latitude e longitude brutas são difíceis para modelos lineares.
+## Distância ao centro de emprego mais próximo (r=-0.384 com target) é
+## muito mais informativa. Usamos distância euclidiana em graus (mesma
+## escala do dataset — ≈111 km/grau).
+## nearest_city_distance = min(todas as dist_* do bloco)
+#geo_distances:
+#  lat_col: "latitude"
+#  lon_col: "longitude"
+#  nearest_city_column: "nearest_city_distance"
+#  cities:
+#    - name: "san_francisco"
+#      lat: 37.7749
+#      lon: -122.4194
+#    - name: "los_angeles"
+#      lat: 34.0522
+#      lon: -118.2437
+#    - name: "san_jose"
+#      lat: 37.3382
+#      lon: -121.8863
+#    - name: "san_diego"
+#      lat: 32.7157
+#      lon: -117.1611
+#    - name: "sacramento"
+#      lat: 38.5816
+#      lon: -121.4944
+#
+## ── 6. Features Polinomiais e Interações ─────────────────────────────────────
+## Captura não-linearidade e efeitos combinados detectados na EDA.
+## median_income_x_housing_median_age: r=0.589 com target (bairros ricos E antigos)
+## median_income_squared: captura retorno decrescente da renda em alta faixa
+#polynomial_features:
+#  - name: "median_income_squared"
+#    columns: ["median_income"]       # x²  (degree=2, single feature)
+#  - name: "housing_median_age_squared"
+#    columns: ["housing_median_age"]  # x²
+#  - name: "median_income_x_housing_median_age"
+#    columns: ["median_income", "housing_median_age"]  # interação (produto)
+#
+# ── 7. Encoding da Variável Categórica ───────────────────────────────────────
+# ocean_proximity tem 5 categorias com impacto grande (η²=0.238).
+# Duas representações:
+#   ordinal: distância crescente ao oceano (0=ISLAND, 4=INLAND)
+#   one-hot: dummies explícitas (sem drop_first — mantemos todas para interpretação)
+categorical_encoding:
+  column: ["product_category_name", "customer_state", "seller_state", "order_status"]
+  ordinal_column:
+  one_hot_prefix: "op"
+  drop_first: false                  # mantém todas as categorias
+
+## ── 8. Seleção de Features ────────────────────────────────────────────────────
+## Baseado no ranking do EDA Report (Seção 13 — Priority Feature List).
+## Colunas brutas de contagem (total_rooms, total_bedrooms, population, households)
+## são EXCLUÍDAS — substituídas pelas razões e versões log.
+## O target (median_house_value) é mantido para facilitar o split treino/teste.
+feature_selection:
+  target: "bin_delivered_on_time"
+  features_to_keep:
+#     - "customer_id"
+#     - "order_status"
+     - "order_purchase_timestamp"
+     - "order_approved_at"
+     - "order_delivered_carrier_date"
+#     - "order_delivered_customer_date"
+     - "order_estimated_delivery_date"
+     - "shipping_limit_date"
+#     - "order_item_id"
+#     - "product_id"
+#     - "seller_id"
+#     - "price"
+#     - "freight_value"
+#     - "product_category_name"
+#     - "product_name_lenght"
+#     - "product_description_lenght"
+#     - "product_photos_qty"
+#     - "product_weight_g"
+#     - "product_length_cm"
+#     - "product_height_cm"
+#     - "product_width_cm"
+#     - "seller_zip_code_prefix"
+#     - "seller_city"
+#     - "seller_state"
+#     - "customer_unique_id"
+#     - "customer_zip_code_prefix"
+#     - "customer_city"
+#     - "customer_state"
+     - "bin_delivered_on_time"
+#     - "op_product_agro_industria_e_comercio"
+#     - "op_product_alimentos"
+#     - "op_product_alimentos_bebidas"
+#     - "op_product_artes"
+#     - "op_product_artes_e_artesanato"
+#     - "op_product_artigos_de_festas"
+#     - "op_product_artigos_de_natal"
+#     - "op_product_audio"
+#     - "op_product_automotivo"
+#     - "op_product_bebes"
+#     - "op_product_bebidas"
+#     - "op_product_beleza_saude"
+#     - "op_product_brinquedos"
+#     - "op_product_cama_mesa_banho"
+#     - "op_product_casa_conforto"
+#     - "op_product_casa_conforto_2"
+#     - "op_product_casa_construcao"
+#     - "op_product_cds_dvds_musicais"
+#     - "op_product_cine_foto"
+#     - "op_product_climatizacao"
+#     - "op_product_consoles_games"
+#     - "op_product_construcao_ferramentas_construcao"
+#     - "op_product_construcao_ferramentas_ferramentas"
+#     - "op_product_construcao_ferramentas_iluminacao"
+#     - "op_product_construcao_ferramentas_jardim"
+#     - "op_product_construcao_ferramentas_seguranca"
+#     - "op_product_cool_stuff"
+#     - "op_product_dvds_blu_ray"
+#     - "op_product_eletrodomesticos"
+#     - "op_product_eletrodomesticos_2"
+#     - "op_product_eletronicos"
+#     - "op_product_eletroportateis"
+#     - "op_product_esporte_lazer"
+#     - "op_product_fashion_bolsas_e_acessorios"
+#     - "op_product_fashion_calcados"
+#     - "op_product_fashion_esporte"
+#     - "op_product_fashion_roupa_feminina"
+#     - "op_product_fashion_roupa_infanto_juvenil"
+#     - "op_product_fashion_roupa_masculina"
+#     - "op_product_fashion_underwear_e_moda_praia"
+#     - "op_product_ferramentas_jardim"
+#     - "op_product_flores"
+#     - "op_product_fraldas_higiene"
+#     - "op_product_industria_comercio_e_negocios"
+#     - "op_product_informatica_acessorios"
+#     - "op_product_instrumentos_musicais"
+#     - "op_product_la_cuisine"
+#     - "op_product_livros_importados"
+#     - "op_product_livros_interesse_geral"
+#     - "op_product_livros_tecnicos"
+#     - "op_product_malas_acessorios"
+#     - "op_product_market_place"
+#     - "op_product_moveis_colchao_e_estofado"
+#     - "op_product_moveis_cozinha_area_de_servico_jantar_e_jardim"
+#     - "op_product_moveis_decoracao"
+#     - "op_product_moveis_escritorio"
+#     - "op_product_moveis_quarto"
+#     - "op_product_moveis_sala"
+#     - "op_product_musica"
+#     - "op_product_papelaria"
+#     - "op_product_pc_gamer"
+#     - "op_product_pcs"
+#     - "op_product_perfumaria"s
+#     - "op_product_pet_shop"
+#     - "op_product_portateis_casa_forno_e_cafe"
+#     - "op_product_portateis_cozinha_e_preparadores_de_alimentos"
+#     - "op_product_relogios_presentes"
+#     - "op_product_seguros_e_servicos"
+#     - "op_product_sem categoria"
+#     - "op_product_sinalizacao_e_seguranca"
+#     - "op_product_tablets_impressao_imagem"
+#     - "op_product_telefonia"
+#     - "op_product_telefonia_fixa"
+#     - "op_product_utilidades_domesticas"
+     - "op_customer_AC"
+     - "op_customer_AL"
+     - "op_customer_AM"
+     - "op_customer_AP"
+     - "op_customer_BA"
+     - "op_customer_CE"
+     - "op_customer_DF"
+     - "op_customer_ES"
+     - "op_customer_GO"
+     - "op_customer_MA"
+     - "op_customer_MG"
+     - "op_customer_MS"
+     - "op_customer_MT"
+     - "op_customer_PA"
+     - "op_customer_PB"
+     - "op_customer_PE"
+     - "op_customer_PI"
+     - "op_customer_PR"
+     - "op_customer_RJ"
+     - "op_customer_RN"
+     - "op_customer_RO"
+     - "op_customer_RR"
+     - "op_customer_RS"
+     - "op_customer_SC"
+     - "op_customer_SE"
+     - "op_customer_SP"
+     - "op_customer_TO"
+#     - "op_seller_AM"
+#     - "op_seller_BA"
+#     - "op_seller_CE"
+#     - "op_seller_DF"
+#     - "op_seller_ES"
+#     - "op_seller_GO"
+#     - "op_seller_MA"
+#     - "op_seller_MG"
+#     - "op_seller_MS"
+#     - "op_seller_MT"
+#     - "op_seller_PA"
+#     - "op_seller_PB"
+#     - "op_seller_PE"
+#     - "op_seller_PI"
+#     - "op_seller_PR"
+#     - "op_seller_RJ"
+#     - "op_seller_RN"
+#     - "op_seller_RO"
+#     - "op_seller_RS"
+#     - "op_seller_SC"
+#     - "op_seller_SE"
+#     - "op_seller_SP"
+#     - "op_order_delivered"

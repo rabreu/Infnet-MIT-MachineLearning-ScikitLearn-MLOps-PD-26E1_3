@@ -1,1 +1,7 @@
 .idea/
+secrets.env
+raw/
+processed/
+*.csv
+desktop.ini
+outputs/

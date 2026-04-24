@@ -1,0 +1,142 @@
+# quality.yaml — Configuração de Qualidade de Dados via Great Expectations
+#
+# Este arquivo define TODAS as regras de qualidade. O código (src/quality.py)
+# é genérico: ele lê este YAML e executa as verificações dinamicamente.
+#
+# Princípio MLOps: separar política (YAML) de mecanismo (código).
+# Para alterar um critério basta editar este arquivo — sem tocar no código.
+#
+# Tipos de expectation usam snake_case (padrão GE).
+# kwargs seguem a assinatura exata de cada classe GE.
+quality:
+  suite_name: "olist_brazilian_ecommerce"
+  # fail_pipeline_on_error: true → lança RuntimeError se qualquer check falhar
+  # Use true em produção, false durante exploração / desenvolvimento
+  fail_pipeline_on_error: false
+  output_dir: "outputs/quality"      # relatório JSON salvo aqui
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Expectations de TABELA (sem coluna específica)
+# Validam propriedades globais do dataset
+# ─────────────────────────────────────────────────────────────────────────────
+table_expectations:
+
+  # O dataset deve ter entre 5.000 e 25.000 linhas
+  - type: expect_table_row_count_to_be_between
+    kwargs:
+      min_value: 40000
+      max_value: 50000
+
+  # Garante que o schema não mudou — nenhuma coluna foi adicionada ou removida
+  - type: expect_table_columns_to_match_set
+    kwargs:
+      column_set:
+        - customer_id
+        - order_status
+        - order_purchase_timestamp
+        - order_approved_at
+        - order_delivered_carrier_date
+        - order_delivered_customer_date
+        - order_estimated_delivery_date
+        - order_item_id
+        - product_id
+        - seller_id
+        - shipping_limit_date
+        - price
+        - freight_value
+        - product_category_name
+        - product_name_lenght
+        - product_description_lenght
+        - product_photos_qty
+        - product_weight_g
+        - product_length_cm
+        - product_height_cm
+        - product_width_cm
+        - seller_zip_code_prefix
+        - seller_city
+        - seller_state
+        - customer_unique_id
+        - customer_zip_code_prefix
+        - customer_city
+        - customer_state
+      exact_match: true
+  - type: ExpectCompoundColumnsToBeUnique
+    kwargs:
+      column_list:
+        - customer_id
+        - order_purchase_timestamp
+        - order_item_id
+  - type: ExpectColumnPairValuesAToBeGreaterThanB
+    kwargs:
+      column_A: shipping_limit_date
+      column_B: order_purchase_timestamp
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Expectations de COLUNA
+# Cada chave é o nome de uma coluna; o valor é uma lista de checks.
+# Ordem importa: checks mais baratos (null) devem vir antes de range checks.
+# ─────────────────────────────────────────────────────────────────────────────
+column_expectations:
+  customer_id:
+    - type: expect_column_values_to_not_be_null
+  order_status:
+    - type: expect_column_values_to_not_be_null
+  order_purchase_timestamp:
+    - type: expect_column_values_to_not_be_null
+    - type: ExpectColumnValuesToMatchRegex
+      kwargs:
+        regex: "[0-9]"
+  order_approved_at:
+    - type: expect_column_values_to_not_be_null
+    - type: expect_column_proportion_of_non_null_values_to_be_between
+      kwargs:
+        min_value: 0
+        max_value: 9.9
+    - type: ExpectColumnValuesToMatchRegex
+      kwargs:
+        regex: "[0-9]"
+  order_delivered_carrier_date:
+    - type: expect_column_values_to_not_be_null
+    - type: expect_column_proportion_of_non_null_values_to_be_between
+      kwargs:
+        min_value: 0
+        max_value: 9.9
+    - type: ExpectColumnValuesToMatchRegex
+      kwargs:
+        regex: "[0-9]"
+  order_delivered_customer_date:
+    - type: expect_column_values_to_not_be_null
+    - type: expect_column_proportion_of_non_null_values_to_be_between
+      kwargs:
+        min_value: 0
+        max_value: 9.9
+  order_estimated_delivery_date:
+    - type: expect_column_values_to_not_be_null
+    - type: ExpectColumnValuesToMatchRegex
+      kwargs:
+        regex: "[0-9]"
+  order_item_id:
+    - type: expect_column_values_to_not_be_null
+  seller_id:
+    - type: expect_column_values_to_not_be_null
+  shipping_limit_date:
+    - type: expect_column_values_to_not_be_null
+    - type: ExpectColumnValuesToMatchRegex
+      kwargs:
+        regex: "[0-9]"
+  freight_value:
+    - type: expect_column_values_to_not_be_null
+  customer_unique_id:
+    - type: expect_column_values_to_not_be_null
+  customer_zip_code_prefix:
+    - type: expect_column_values_to_not_be_null
+    - type: ExpectColumnValuesToMatchRegex
+      kwargs:
+        regex: "[0-9]"
+  customer_city:
+    - type: expect_column_values_to_not_be_null
+  customer_state:
+    - type: expect_column_values_to_not_be_null
+    - type: ExpectColumnValuesToMatchRegex
+      kwargs:
+        regex: "^[A-Z]{2}$"

@@ -1,0 +1,4 @@
+version: 1.0
+name: "olist-brazilian-ecommerce"
+paths:
+  input_data: "dataset/processed/features/olist_ecommerce_features.parquet"
